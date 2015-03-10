@@ -259,8 +259,13 @@ def validate_receipt_is_active(data, timedelta, is_test=False):
     # Check with Apple
     updated_content = validate_receipt_with_apple(data)
 
+    # Use the latest receipt information from Apple, otherwise
+    # use the IAP from the receipt
+    iaps = updated_content.get(
+        'latest_receipt_info', updated_content['receipt']['in_app'])
+
     # Ensure the updated receipt has an active subscription.
-    for iap in updated_content['receipt']['in_app']:
+    for iap in iaps:
         if iap.get('cancellation_date'):
             # This iap is canceled. Ignore it
             continue
