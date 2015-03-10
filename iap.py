@@ -261,8 +261,8 @@ def validate_receipt_is_active(data, timedelta, is_test=False):
 
     # Ensure the updated receipt has an active subscription.
     for iap in updated_content['receipt']['in_app']:
-        if 'cancellation_date' in iap:
-            # This iap is cancelled. Ignore it
+        if iap.get('cancellation_date'):
+            # This iap is canceled. Ignore it
             continue
         # Look for an expires_date
         expires_date_ms = int(iap.get('expires_date_ms', 0))
