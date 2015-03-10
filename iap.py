@@ -269,13 +269,14 @@ def validate_receipt_is_active(data, timedelta, is_test=False):
         if expires_date_ms:
             # See if this iap is expired
             expires_date_sec = expires_date_ms / 1000.0
-            expires_date = datetime.datetime.fromtimestamp(expires_date_sec)
+            expires_date = datetime.datetime.utcfromtimestamp(expires_date_sec)
             if datetime.datetime.utcnow() < expires_date + grace_period:
                 return
         else:
             # Check the subscription period
             purchase_date_sec = int(iap['original_purchase_date_ms']) / 1000.0
-            purchase_date = datetime.datetime.fromtimestamp(purchase_date_sec)
+            purchase_date = datetime.datetime.utcfromtimestamp(
+                purchase_date_sec)
             expires_date = purchase_date + timedelta
             if datetime.datetime.utcnow() < expires_date + grace_period:
                 return
