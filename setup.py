@@ -9,6 +9,7 @@ setup(
     description='Python utilities for working with Apple In-App Purchases (IAP)',
     author='Educreations Engineering',
     author_email='engineering@educreations.com',
+    url='https://github.com/educreations/python-iap',
     py_modules=['iap'],
     install_requires=['pycrypto', 'django', 'requests'],
 )
