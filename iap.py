@@ -215,7 +215,7 @@ def validate_device(decoded_receipt, bundle_ids):
 
 
 def validate_product(decoded_receipt, product_ids):
-    # If there is no products in the receipt, they are all ok
+    # If there are no products in the receipt, they are all ok
     for in_app in decoded_receipt.get('in_app', []):
         if 'product_id' not in in_app:
             raise InvalidReceipt(u'Unknown decoded receipt format!')
