@@ -160,7 +160,7 @@ def validate_receipt_with_apple(data):
         content = r.json()
         if 'status' not in content:
             raise ReceiptValidationException(content, 'Unknown response format')
-        status = content['status']
+        status = content.get('status', 21000)
         if status == 21000:
             # The App Store could not read the JSON object you provided.
             raise ReceiptValidationException(content, 'Unable to read payload')
@@ -193,11 +193,11 @@ def validate_receipt_with_apple(data):
             raise ReceiptValidationException(
                 content, 'Unable to get receipt from Apple')
 
-        receipt = content['receipt']
+        receipt = content.get('receipt', [])
         if len(receipt) != 15:
             raise ReceiptValidationException(content, 'Got too much receipt!')
 
-        in_app_purchases = receipt['in_app']
+        in_app_purchases = receipt.get('in_app', [])
         if not len(in_app_purchases):
             raise ReceiptValidationException(content, 'No IAPs for receipt!')
 
@@ -215,7 +215,8 @@ def validate_device(decoded_receipt, bundle_ids):
 
 
 def validate_product(decoded_receipt, product_ids):
-    for in_app in decoded_receipt['in_app']:
+    # If there is no products in the receipt, they are all ok
+    for in_app in decoded_receipt.get('in_app', []):
         if 'product_id' not in in_app:
             raise InvalidReceipt(u'Unknown decoded receipt format!')
         if in_app['product_id'] not in product_ids:
@@ -231,7 +232,7 @@ def validate_production_receipt(decoded_receipt):
 
 
 def validate_debug_receipt(decoded_receipt):
-    if not decoded_receipt['_sandbox']:
+    if not decoded_receipt.get('_sandbox'):
         raise InvalidReceipt('Debug receipts must be in the sandbox!')
 
     bundle_ids = ([DEBUG_BUNDLE_ID, PRODUCTION_BUNDLE_ID]
