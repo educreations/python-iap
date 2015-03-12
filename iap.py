@@ -232,7 +232,7 @@ def validate_production_receipt(decoded_receipt):
 
 
 def validate_debug_receipt(decoded_receipt):
-    if not decoded_receipt.get('_sandbox'):
+    if not decoded_receipt['_sandbox']:
         raise InvalidReceipt('Debug receipts must be in the sandbox!')
 
     bundle_ids = ([DEBUG_BUNDLE_ID, PRODUCTION_BUNDLE_ID]
