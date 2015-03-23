@@ -175,7 +175,7 @@ def validate_receipt_with_apple(data):
         elif status == 21004:
             # Bad shared secret for the app / auth failed
             # NOTE: Only returned for iOS 6 style transaction receipts for
-            # auto-renewable subscriptions.#
+            # auto-renewable subscriptions.
             raise ReceiptValidationException(
                 content, 'The shared secret does not match one on file')
         elif status == 21005:
