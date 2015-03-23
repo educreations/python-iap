@@ -154,6 +154,7 @@ def validate_receipt_with_apple(data):
     if IAP_SHARED_SECRET:
         payload['password'] = IAP_SHARED_SECRET
 
+    # Docs at http://goo.gl/WV5U63
     for url in (PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL):
         r = requests.post(url, data=json.dumps(payload))
         r.raise_for_status()
@@ -172,12 +173,23 @@ def validate_receipt_with_apple(data):
             raise ReceiptValidationException(
                 content, 'Receipt is from an unknown source')
         elif status == 21004:
-            # Bad shared secret for the app
+            # Bad shared secret for the app / auth failed
+            # NOTE: Only returned for iOS 6 style transaction receipts for
+            # auto-renewable subscriptions.#
             raise ReceiptValidationException(
                 content, 'The shared secret does not match one on file')
         elif status == 21005:
             # The receipt server is not currently available.
             raise ReceiptValidationException(content, 'WebObjects')
+        elif status == 21006:
+            # The receipt is inactive
+            # NOTE: Only returned for iOS 6 style transaction receipts for
+            # auto-renewable subscriptions. For iOS 7 style app receipts, the
+            # status code is reflects the status of the app receipt as a whole.
+            # For example, if you send a valid app receipt that contains an
+            # expired subscription, the response is 0 because the receipt as a
+            # whole is valid.
+            raise ReceiptValidationException(content, 'Inactive subscription')
         elif status == 21007:
             if url == PRODUCTION_VERIFICATION_URL:
                 # We need to try the other environment
@@ -261,7 +273,18 @@ def validate_receipt_is_active(data, timedelta, is_test=False):
     updated_content = validate_receipt_with_apple(data)
 
     # Use the latest receipt information from Apple, otherwise
-    # use the IAP from the receipt
+    # use the IAP from the receipt. latest_receipt_info is only returned for
+    # iOS 6 style transaction receipts for auto-renewable subscriptions.
+    # From Apple:
+    #
+    # The values of the latest_receipt and latest_receipt_info keys are useful
+    # when checking whether an auto-renewable subscription is currently active.
+    # By providing any transaction receipt for the subscription and checking
+    # these values, you can get information about the currently-active
+    # subscription period. If the receipt being validated is for the latest
+    # renewal, the value for latest_receipt is the same as receipt-data
+    # (in the request) and the value for latest_receipt_info is the same as
+    # receipt.
     iaps = updated_content.get(
         'latest_receipt_info', updated_content['receipt']['in_app'])
 
