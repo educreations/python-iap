@@ -166,7 +166,7 @@ def validate_receipt_with_apple(data):
         try:
             content = r.json()
         except JSONDecodeError:
-            raise ReceiptValidationException({}, 'Unnable to read response')
+            raise ReceiptValidationException({}, 'Unable to read response')
 
         if 'status' not in content:
             raise ReceiptValidationException(content, 'Unknown response format')
