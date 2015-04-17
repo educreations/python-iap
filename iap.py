@@ -8,6 +8,11 @@ import requests
 from Crypto.Util import asn1
 from django.conf import settings
 
+try:
+    from simplejson.decoder import JSONDecodeError
+except ImportError:
+    JSONDecodeError = ValueError
+
 __all__ = [
     'CancelledPurchaseException',
     'NoActiveReceiptException',
@@ -158,7 +163,11 @@ def validate_receipt_with_apple(data):
     for url in (PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL):
         r = requests.post(url, data=json.dumps(payload))
         r.raise_for_status()
-        content = r.json()
+        try:
+            content = r.json()
+        except JSONDecodeError:
+            raise ReceiptValidationException({}, 'Unnable to read response')
+
         if 'status' not in content:
             raise ReceiptValidationException(content, 'Unknown response format')
         status = content.get('status', 21000)
