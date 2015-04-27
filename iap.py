@@ -14,8 +14,9 @@ except ImportError:
     JSONDecodeError = ValueError
 
 __all__ = [
-    'CancelledPurchaseException',
+    'InvalidReceipt',
     'NoActiveReceiptException',
+    'NoPurchasesException',
     'ReceiptValidationException',
     'parse_receipt',
     'validate_debug_receipt',
@@ -50,11 +51,11 @@ class ReceiptValidationException(Exception):
         super(ReceiptValidationException, self).__init__(*args, **kwargs)
 
 
-class CancelledPurchaseException(ReceiptValidationException):
+class NoActiveReceiptException(ReceiptValidationException):
     pass
 
 
-class NoActiveReceiptException(ReceiptValidationException):
+class NoPurchasesException(ReceiptValidationException):
     pass
 
 
@@ -220,7 +221,7 @@ def validate_receipt_with_apple(data):
 
         in_app_purchases = receipt.get('in_app', [])
         if not len(in_app_purchases):
-            raise ReceiptValidationException(content, 'No IAPs for receipt!')
+            raise NoPurchasesException(content, 'No IAPs for receipt!')
 
         return content
 
