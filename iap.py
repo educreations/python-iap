@@ -216,8 +216,8 @@ def validate_receipt_with_apple(data):
                 content, 'Unable to get receipt from Apple')
 
         receipt = content.get('receipt', [])
-        if len(receipt) != 15:
-            raise ReceiptValidationException(content, 'Got too much receipt!')
+        if not len(receipt):
+            raise ReceiptValidationException(content, 'Not enough receipt!')
 
         in_app_purchases = receipt.get('in_app', [])
         if not len(in_app_purchases):
