@@ -269,18 +269,17 @@ def validate_debug_receipt(decoded_receipt):
 
 
 def validate_receipt_is_active(data, timedelta, is_test=False):
-    # Validate the device and product are ok
-    local_validation = (
-        validate_debug_receipt if is_test else validate_production_receipt)
-    decoded = parse_receipt(data)
-    local_validation(decoded)
-
     # Establish grace period
     delta_kwargs = {'minutes': 1} if is_test else {'days': 1}
     grace_period = datetime.timedelta(**delta_kwargs)
 
     # Check with Apple
     updated_content = validate_receipt_with_apple(data)
+
+    # Validate the device and product are ok
+    local_validation = (
+        validate_debug_receipt if is_test else validate_production_receipt)
+    local_validation(updated_content['receipt'])
 
     # Use the latest receipt information from Apple, otherwise
     # use the IAP from the receipt. latest_receipt_info is only returned for
