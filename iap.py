@@ -51,6 +51,10 @@ class ReceiptValidationException(Exception):
         super(ReceiptValidationException, self).__init__(*args, **kwargs)
 
 
+class RetryReceiptValidation(ReceiptValidationException):
+    pass
+
+
 class NoActiveReceiptException(ReceiptValidationException):
     pass
 
@@ -207,6 +211,10 @@ def validate_receipt_with_apple(data):
             raise ReceiptValidationException(content, 'Cannot try another url!')
         elif status == 21008:
             raise ReceiptValidationException(content, 'We already tried prod!')
+        elif status == 21009:
+            # This seems to be an internal Apple error. In this case,
+            # one should retry the request
+            raise RetryReceiptValidation(content, 'Internal Apple error. Retry')
         elif status != 0:
             raise ReceiptValidationException(
                 content, 'Unknown status code %s!' % status)
@@ -274,7 +282,11 @@ def validate_receipt_is_active(data, timedelta, is_test=False):
     grace_period = datetime.timedelta(**delta_kwargs)
 
     # Check with Apple
-    updated_content = validate_receipt_with_apple(data)
+    try:
+        updated_content = validate_receipt_with_apple(data)
+    except RetryReceiptValidation:
+        # Try one more time
+        updated_content = validate_receipt_with_apple(data)
 
     # Validate the device and product are ok
     local_validation = (
