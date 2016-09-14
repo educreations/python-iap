@@ -117,8 +117,8 @@ def decode_receipt(data):
         0: ('_environment', decode_utf8),
         2: ('bundle_id', decode_utf8),
         3: ('application_version', decode_utf8),
-        #4: ('_opaque_value', lambda x: x),
-        #5: ('_sha1_hash', lambda x: x),
+        # 4: ('_opaque_value', lambda x: x),
+        # 5: ('_sha1_hash', lambda x: x),
         17: ('in_app', decode_receipt),
         19: ('original_application_version', decode_utf8),
         21: ('expiration_date', decode_ia5),
@@ -144,7 +144,7 @@ def decode_receipt(data):
             result.setdefault(name, []).append(decoder(attr_value))
         elif name is not None:
             result[name] = decoder(attr_value)
-        #else:
+        # else:
         #    result['_unknown_{}'.format(attr_type)] = attr_value
 
     result['_sandbox'] = (
