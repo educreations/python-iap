@@ -231,6 +231,15 @@ def validate_receipt_with_apple(data):
         if not len(in_app_purchases):
             raise NoPurchasesException(content, 'No IAPs for receipt!')
 
+        latest_receipt = receipt.get('latest_receipt')
+        if latest_receipt:
+            try:
+                receipt['latest_receipt_encoded'] = latest_receipt
+                receipt['latest_receipt'] = base64.b64decode(latest_receipt)
+            except TypeError:
+                raise ReceiptValidationException(
+                    content, 'Cannot decode latest_receipt')
+
         return content
 
 
