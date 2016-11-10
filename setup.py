@@ -13,7 +13,7 @@ if sys.argv[-1] == 'publish':
 
 setup(
     name='iap',
-    version='1.2.2',
+    version='1.2.3',
     description='Python utilities for working with Apple In-App Purchases (IAP)',
     author='Educreations Engineering',
     author_email='engineering@educreations.com',
