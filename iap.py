@@ -215,9 +215,14 @@ def validate_receipt_with_apple(data):
             # This seems to be an internal Apple error. In this case,
             # one should retry the request
             raise RetryReceiptValidation(content, 'Internal Apple error. Retry')
+        elif status == 21010:
+            # This receipt could not be authorized. Treated as if the purchase
+            # was never made.
+            raise NoPurchasesException(
+                    content, 'The receipt could not be authorized')
         elif status != 0:
-            raise ReceiptValidationException(
-                content, 'Unknown status code %s!' % status)
+            raise RetryReceiptValidation(
+                content, 'Unknown status code %s. Retry' % status)
 
         if 'receipt' not in content:
             raise ReceiptValidationException(
