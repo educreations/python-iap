@@ -290,7 +290,7 @@ def validate_debug_receipt(decoded_receipt):
         decoded_receipt, DEBUG_PRODUCT_IDS | PRODUCTION_PRODUCT_IDS)
 
 
-def validate_receipt_is_active(data, timedelta, is_test=False):
+def validate_receipt_is_active(data, timedelta, is_test=False, product_id=None):
     # Establish grace period
     delta_kwargs = {'minutes': 1} if is_test else {'days': 1}
     grace_period = datetime.timedelta(**delta_kwargs)
@@ -328,6 +328,13 @@ def validate_receipt_is_active(data, timedelta, is_test=False):
         if iap.get('cancellation_date'):
             # This iap is canceled. Ignore it
             continue
+
+        # If we were given a product_id, make sure this iap is for that same
+        # product_id
+        if product_id is not None and iap.get('product_id') != product_id:
+            # Ignore this IAP as it is for a different product
+            continue
+
         # Look for an expires_date
         expires_date_ms = int(iap.get('expires_date_ms', 0))
         if expires_date_ms:
