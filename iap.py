@@ -219,7 +219,11 @@ def validate_receipt_with_apple(data):
             # This receipt could not be authorized. Treated as if the purchase
             # was never made.
             raise NoPurchasesException(
-                    content, 'The receipt could not be authorized')
+                content, 'The receipt could not be authorized')
+        elif status >= 21100 and status <= 12299:
+            # There was an internal data access error
+            raise RetryReceiptValidation(
+                content, 'Internal data access error %s. Retry' % status)
         elif status != 0:
             raise RetryReceiptValidation(
                 content, 'Unknown status code %s. Retry' % status)
