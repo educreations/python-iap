@@ -13,11 +13,14 @@ if sys.argv[-1] == 'publish':
 
 setup(
     name='iap',
-    version='2.0.0',
+    version='2.0.1',
     description='Python utilities for working with Apple In-App Purchases (IAP)',
+    license="MIT",
+    keywords="iap appstore django",
     author='Educreations Engineering',
     author_email='engineering@educreations.com',
     url='https://github.com/educreations/python-iap',
-    py_modules=['iap'],
-    install_requires=['pycrypto', 'django', 'requests'],
+    packages=["iap"],
+    package_dir={"iap": "iap"},
+    install_requires=['pycrypto', 'Django>=1.7', 'requests'],
 )
