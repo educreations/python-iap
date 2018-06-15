@@ -6,61 +6,30 @@ import subprocess
 
 import requests
 from Crypto.Util import asn1
-from django.conf import settings
 
 try:
     from simplejson.decoder import JSONDecodeError
 except ImportError:
     JSONDecodeError = ValueError
 
-__all__ = [
-    'InvalidReceipt',
-    'NoActiveReceiptException',
-    'NoPurchasesException',
-    'ReceiptValidationException',
-    'parse_receipt',
-    'validate_debug_receipt',
-    'validate_production_receipt',
-    'validate_receipt_with_apple',
-    'validate_receipt_is_active',
-]
+from .exceptions import (
+    InvalidReceipt,
+    NoActiveReceiptException,
+    NoPurchasesException,
+    ReceiptValidationException,
+    RetryReceiptValidation,
+)
 
-CA_FILE = settings.IAP_SETTINGS['CA_FILE']
-
-IAP_SHARED_SECRET = settings.IAP_SETTINGS.get('SHARED_SECRET')
-
-PRODUCTION_VERIFICATION_URL = 'https://buy.itunes.apple.com/verifyReceipt'
-SANDBOX_VERIFICATION_URL = 'https://sandbox.itunes.apple.com/verifyReceipt'
-
-PRODUCTION_BUNDLE_ID = settings.IAP_SETTINGS['PRODUCTION_BUNDLE_ID']
-DEBUG_BUNDLE_ID = settings.IAP_SETTINGS.get('DEBUG_BUNDLE_ID')
-
-PRODUCTION_PRODUCT_IDS = settings.IAP_SETTINGS.get(
-    'PRODUCTION_PRODUCT_IDS', set())
-DEBUG_PRODUCT_IDS = settings.IAP_SETTINGS.get(
-    'DEBUG_PRODUCT_IDS', set())
-
-
-class InvalidReceipt(Exception):
-    pass
-
-
-class ReceiptValidationException(Exception):
-    def __init__(self, receipt, *args, **kwargs):
-        self.receipt = receipt
-        super(ReceiptValidationException, self).__init__(*args, **kwargs)
-
-
-class RetryReceiptValidation(ReceiptValidationException):
-    pass
-
-
-class NoActiveReceiptException(ReceiptValidationException):
-    pass
-
-
-class NoPurchasesException(ReceiptValidationException):
-    pass
+from .settings import (
+    CA_FILE,
+    IAP_SHARED_SECRET,
+    PRODUCTION_VERIFICATION_URL,
+    SANDBOX_VERIFICATION_URL,
+    PRODUCTION_BUNDLE_ID,
+    DEBUG_BUNDLE_ID,
+    PRODUCTION_PRODUCT_IDS,
+    DEBUG_PRODUCT_IDS,
+)
 
 
 def verify_receipt_sig(raw_data):
