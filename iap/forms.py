@@ -29,12 +29,12 @@ class AppleStatusUpdateForm(forms.Form):
     # Specifies whether the notification is for a sandbox or a production
     # environment.
     environment = forms.ChoiceField(choices=[
-        (env.lower(), env) for env in ENVIRONMENTS
+        (env, env.lower()) for env in ENVIRONMENTS
     ])
 
     # Describes the kind of event that triggered the notification.
     notification_type = forms.ChoiceField(choices=[
-        (notif.lower(), notif) for notif in NOTIFICATION_TYPES
+        (notif, notif.lower()) for notif in NOTIFICATION_TYPES
     ])
 
     # This value is the same as the shared secret you POST when validating
