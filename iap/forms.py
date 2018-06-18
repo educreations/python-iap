@@ -95,8 +95,9 @@ class AppleStatusUpdateForm(forms.Form):
 
         try:
             return json.loads(info)
-        except ValueError:
-            raise forms.ValidationError('Unable to parse latest_receipt_info')
+        except ValueError as e:
+            raise forms.ValidationError(
+                'Unable to parse latest_receipt_info: {}'.format(e))
 
     def clean_latest_expired_receipt_info(self):
         info = self.cleaned_data.get('latest_expired_receipt_info')
@@ -105,5 +106,6 @@ class AppleStatusUpdateForm(forms.Form):
 
         try:
             return json.loads(info)
-        except ValueError:
-            raise forms.ValidationError('Unable to parse latest_expired_receipt_info')
+        except ValueError as e:
+            raise forms.ValidationError(
+                'Unable to parse latest_expired_receipt_info: {}'.format(e))
