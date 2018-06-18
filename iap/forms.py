@@ -44,7 +44,7 @@ class AppleStatusUpdateForm(forms.Form):
     # This value is the same as the Original Transaction Identifier in the
     # receipt. You can use this value to relate multiple iOS 6-style transaction
     # receipts for an individual customer’s subscription.
-    original_transaction_id = forms.CharField()
+    original_transaction_id = forms.CharField(required=False)
 
     # The time and date that a transaction was cancelled by Apple customer
     # support. Posted only if the notification_type is CANCEL.
