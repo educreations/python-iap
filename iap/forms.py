@@ -1,3 +1,4 @@
+import base64
 import json
 
 from django import forms
@@ -14,14 +15,14 @@ class AppleStatusUpdateForm(forms.Form):
 
     INITIAL_BUY = 'INITIAL_BUY'
     CANCEL = 'CANCEL'
-    RENEW = 'RENEW'
+    RENEWAL = 'RENEWAL'
     INTERACTIVE_RENEWAL = 'INTERACTIVE_RENEWAL'
     DID_CHANGE_RENEWAL_PREF = 'DID_CHANGE_RENEWAL_PREF'
 
     NOTIFICATION_TYPES = (
         INITIAL_BUY,
         CANCEL,
-        RENEW,
+        RENEWAL,
         INTERACTIVE_RENEWAL,
         DID_CHANGE_RENEWAL_PREF,
     )
@@ -43,7 +44,7 @@ class AppleStatusUpdateForm(forms.Form):
 
     # This value is the same as the Original Transaction Identifier in the
     # receipt. You can use this value to relate multiple iOS 6-style transaction
-    # receipts for an individual customer’s subscription.
+    # receipts for an individual customer's subscription.
     original_transaction_id = forms.CharField(required=False)
 
     # The time and date that a transaction was cancelled by Apple customer
@@ -57,23 +58,23 @@ class AppleStatusUpdateForm(forms.Form):
     # The base-64 encoded transaction receipt for the most recent renewal
     # transaction. Posted only if the notification_type is RENEWAL or
     # INTERACTIVE_RENEWAL, and only if the renewal is successful.
-    latest_receipt = forms.FileField(required=False)
+    latest_receipt = forms.CharField(required=False)
 
     # The JSON representation of the receipt for the most recent renewal.
     # Posted only if renewal is successful. Not posted for notification_type
     # CANCEL.
-    latest_receipt_info = forms.CharField(required=False)
+    latest_receipt_info = forms.Field(required=False)
 
     # The base-64 encoded transaction receipt for the most recent renewal
     # transaction. Posted only if the subscription expired.
-    latest_expired_receipt = forms.FileField(required=False)
+    latest_expired_receipt = forms.CharField(required=False)
 
     # The JSON representation of the receipt for the most recent renewal
     # transaction. Posted only if the notification_type is RENEWAL or CANCEL or
     # if renewal failed and subscription expired.
-    latest_expired_receipt_info = forms.CharField(required=False)
+    latest_expired_receipt_info = forms.Field(required=False)
 
-    # A Boolean value indicated by strings “true” or “false”. This is the same
+    # A Boolean value indicated by strings "true" or "false". This is the same
     # as the auto renew status in the receipt.
     auto_renew_status = forms.NullBooleanField()
 
@@ -88,24 +89,40 @@ class AppleStatusUpdateForm(forms.Form):
     # Posted only if notification_type is RENEWAL or INTERACTIVE_RENEWAL.
     expiration_intent = forms.CharField(required=False)
 
-    def clean_latest_receipt_info(self):
-        info = self.cleaned_data.get('latest_receipt_info')
-        if info is None:
+    def _clean_receipt(self, name):
+        receipt = self.cleaned_data.get(name)
+        if not receipt:
+            return None
+
+        try:
+            # Ensure the receipt can be base 64 decoded
+            base64.b64decode(receipt)
+        except TypeError:
+            raise forms.ValidationError('Unable to decode {}'.format(name))
+        return receipt
+
+    def _clean_receipt_info(self, name):
+        info = self.cleaned_data.get(name)
+        if not info:
+            return None
+
+        if not isinstance(info, basestring):
             return info
 
         try:
             return json.loads(info)
         except ValueError as e:
             raise forms.ValidationError(
-                'Unable to parse latest_receipt_info: {}'.format(e))
+                'Unable to parse {} "{}": {}'.format(name, info, e))
+
+    def clean_latest_receipt(self):
+        return self._clean_receipt('latest_receipt')
+
+    def clean_latest_receipt_info(self):
+        return self._clean_receipt_info('latest_receipt_info')
+
+    def clean_latest_expired_receipt(self):
+        return self._clean_receipt('latest_expired_receipt')
 
     def clean_latest_expired_receipt_info(self):
-        info = self.cleaned_data.get('latest_expired_receipt_info')
-        if info is None:
-            return info
-
-        try:
-            return json.loads(info)
-        except ValueError as e:
-            raise forms.ValidationError(
-                'Unable to parse latest_expired_receipt_info: {}'.format(e))
+        return self._clean_receipt_info('latest_expired_receipt_info')
