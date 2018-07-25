@@ -22,5 +22,5 @@ setup(
     url='https://github.com/educreations/python-iap',
     packages=["iap"],
     package_dir={"iap": "iap"},
-    install_requires=['pycrypto', 'Django>=1.7', 'requests'],
+    install_requires=['pycryptodome', 'Django>=1.7', 'requests'],
 )
