@@ -1,11 +1,13 @@
 import base64
 import datetime
 import json
-import os
-import subprocess
 
+from cffi import FFI
+from OpenSSL import crypto
+from pyasn1_modules import rfc2315
+from pyasn1.codec.der import decoder
+from pyasn1.type import namedtype, namedval, univ, char
 import requests
-from Crypto.Util import asn1
 
 try:
     from simplejson.decoder import JSONDecodeError
@@ -31,90 +33,215 @@ from .settings import (
     DEBUG_PRODUCT_IDS,
 )
 
+ffi = FFI()
+
+
+def load_pkcs7_bio_der(p7_der):
+    """
+    Load a PKCS7 object from a PKCS7 DER blob.
+    Return PKCS7 object.
+    """
+    try:
+        return crypto.load_pkcs7_data(crypto.FILETYPE_ASN1, p7_der)
+    except crypto.Error as ex:
+        raise InvalidReceipt('Unable to load PCKS7 data')
+
 
 def verify_receipt_sig(raw_data):
-    proc = subprocess.Popen([
-        'openssl', 'smime', '-verify',
-        '-inform', 'der',
-        '-CAfile', CA_FILE,
-        '-binary',
-    ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    signed_data, err_data = proc.communicate(raw_data)
-    if proc.wait() != os.EX_OK:
-        raise InvalidReceipt('Signature verification failed:\n' + err_data)
-    return signed_data
+    store = crypto.X509Store()
+
+    with open(CA_FILE, 'rb') as ca_cert_file:
+        ca_cert_string = ca_cert_file.read()
+
+    cert = crypto.load_certificate(crypto.FILETYPE_PEM, ca_cert_string)
+
+    store.add_cert(cert)
+
+    p7 = load_pkcs7_bio_der(raw_data)
+    out = crypto._new_mem_buf()
+    if not crypto._lib.PKCS7_verify(
+            p7._pkcs7, ffi.NULL, store._store, ffi.NULL, out, 0):
+        raise InvalidReceipt('Signature verification failed')
+
+    return crypto._bio_to_string(out)
 
 
-def decode_obj(data, expected_type):
-    der = asn1.DerObject()
-    der.decode(data)
-    if der.typeTag != expected_type:
-        raise InvalidReceipt('Expected tag type {}; got {}'.format(
-            expected_type, der.typeTag))
-    return der.payload
+TYPE_ENVIRONMENT = 0
+TYPE_BUNDLE_ID = 2
+TYPE_APPLICATION_VERSION = 3
+TYPE_OPAQUE_VALUE = 4
+TYPE_SHA1_HASH = 5
+TYPE_RECEIPT_CREATION_DATE = 12
+TYPE_IN_APP = 17
+TYPE_ORIGINAL_PURCHASE_DATE = 18
+TYPE_ORIGINAL_APPLICATION_VERSION = 19
+TYPE_EXPIRATION_DATE = 21
 
-
-def decode_seq_set(data):
-    result = []
-    offset = 0
-    while offset < len(data):
-        der = asn1.DerSequence()
-        length = der.decode(data[offset:])
-        offset += length
-        result.append(list(der))
-    return result
+TYPE_IN_APP_QUANTITY = 1701
+TYPE_IN_APP_PRODUCT_ID = 1702
+TYPE_IN_APP_TRANSACTION_ID = 1703
+TYPE_IN_APP_PURCHASE_DATE = 1704
+TYPE_IN_APP_ORIGINAL_TRANSACTION_ID = 1705
+TYPE_IN_APP_ORIGINAL_PURCHASE_DATE = 1706
+TYPE_IN_APP_EXPIRES_DATE = 1708
+TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID = 1711
+TYPE_IN_APP_CANCELLATION_DATE = 1712
 
 
 def decode_ia5(data):
-    return decode_obj(data, 22).decode('ascii')
+    ia5_str, _ = decoder.decode(data, asn1Spec=char.IA5String())
+
+    return str(ia5_str)
 
 
 def decode_utf8(data):
-    return decode_obj(data, 12).decode('utf-8')
+    s, _ = decoder.decode(data, asn1Spec=char.UTF8String())
+    return str(s)
 
 
 def decode_int(data):
-    der = asn1.DerInteger()
-    der.decode(data)
-    return der.value
+    i, _ = decoder.decode(data, asn1Spec=univ.Integer())
+    return int(i)
+
+
+# See https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html
+RECEIPT_FIELD_MAP = {
+    TYPE_ENVIRONMENT: decode_utf8,
+    TYPE_BUNDLE_ID: decode_utf8,
+    TYPE_APPLICATION_VERSION: decode_utf8,
+    TYPE_OPAQUE_VALUE: (lambda x: x.asOctets()),
+    TYPE_SHA1_HASH: (lambda x: x.asOctets()),
+    TYPE_RECEIPT_CREATION_DATE: decode_ia5,
+    TYPE_ORIGINAL_PURCHASE_DATE: decode_ia5,
+    TYPE_ORIGINAL_APPLICATION_VERSION: decode_utf8,
+    TYPE_EXPIRATION_DATE: decode_ia5,
+}
+
+IN_APP_FIELD_MAP = {
+    TYPE_IN_APP_QUANTITY: decode_int,
+    TYPE_IN_APP_PRODUCT_ID: decode_utf8,
+    TYPE_IN_APP_TRANSACTION_ID: decode_utf8,
+    TYPE_IN_APP_PURCHASE_DATE: decode_ia5,
+    TYPE_IN_APP_ORIGINAL_TRANSACTION_ID: decode_utf8,
+    TYPE_IN_APP_ORIGINAL_PURCHASE_DATE: decode_ia5,
+    TYPE_IN_APP_EXPIRES_DATE: decode_ia5,
+    TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID: decode_int,
+    TYPE_IN_APP_CANCELLATION_DATE: decode_ia5,
+}
+
+
+class FieldMap:
+    def __init__(self, field_map):
+        self.field_map = field_map
+
+    def convert(self, from_type, from_value):
+        return self.field_map.get(from_type, lambda x: x)(from_value)
+
+
+class AppReceiptFieldType(univ.Integer):
+    """Apple App Receipt named field type"""
+
+    namedValues = namedval.NamedValues(
+        ('_environment', TYPE_ENVIRONMENT),
+        ('bundle_id', TYPE_BUNDLE_ID),
+        ('application_version', TYPE_APPLICATION_VERSION),
+        ('_opaque_value', TYPE_OPAQUE_VALUE),
+        ('_sha1_hash', TYPE_SHA1_HASH),
+        ('creation_date', TYPE_RECEIPT_CREATION_DATE),
+        ('in_app', TYPE_IN_APP),
+        ('original_purchase_date', TYPE_ORIGINAL_PURCHASE_DATE),
+        ('original_application_version', TYPE_ORIGINAL_APPLICATION_VERSION),
+        ('expiration_date', TYPE_EXPIRATION_DATE),
+    )
+
+
+class AppReceiptField(univ.Sequence):
+    """Apple App Receipt field"""
+
+    componentType = namedtype.NamedTypes(
+        namedtype.NamedType('type', AppReceiptFieldType()),
+        namedtype.NamedType('version', rfc2315.Version()),
+        namedtype.NamedType('value', univ.OctetString())
+    )
+
+
+class AppReceipt(univ.SetOf):
+    """Apple App Receipt"""
+
+    componentType = AppReceiptField()
+
+
+class IAPReceiptFieldType(univ.Integer):
+    """Apple In-App Purchase Receipt named field type"""
+
+    namedValues = namedval.NamedValues(
+        ('quantity', TYPE_IN_APP_QUANTITY),
+        ('product_id', TYPE_IN_APP_PRODUCT_ID),
+        ('transaction_id', TYPE_IN_APP_TRANSACTION_ID),
+        ('purchase_date', TYPE_IN_APP_PURCHASE_DATE),
+        ('original_transaction_id', TYPE_IN_APP_ORIGINAL_TRANSACTION_ID),
+        ('original_purchase_date', TYPE_IN_APP_ORIGINAL_PURCHASE_DATE),
+        ('expires_date', TYPE_IN_APP_EXPIRES_DATE),
+        ('web_order_line_item_id', TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID),
+        ('cancellation_date', TYPE_IN_APP_CANCELLATION_DATE),
+    )
+
+
+class IAPReceiptField(AppReceiptField):
+    """Apple In-App Purchase Receipt field"""
+
+    pass
+
+
+class IAPReceiptFields(univ.SetOf):
+    """Apple In-App Purchase Receipt fields"""
+
+    componentType = IAPReceiptField()
+
+
+def _decode_iap(iap_data):
+    in_app_map = FieldMap(IN_APP_FIELD_MAP)
+    in_app, _ = decoder.decode(iap_data, asn1Spec=IAPReceiptFields())
+
+    result = {}
+    for index in range(len(in_app)):
+        field = in_app[index]
+        field_type = field['type']
+        field_name = IAPReceiptFieldType.namedValues.getName(field_type)
+
+        if not field_name:
+            # We don't know what this field is
+            continue
+
+        value = field['value']
+        result[field_name] = in_app_map.convert(field_type, value)
+
+    return result
 
 
 def decode_receipt(data):
-    # See https://developer.apple.com/library/ios/releasenotes/General/
-    #   ValidateAppStoreReceipt/Chapters/ReceiptFields.html
-    fields = {
-        0: ('_environment', decode_utf8),
-        2: ('bundle_id', decode_utf8),
-        3: ('application_version', decode_utf8),
-        # 4: ('_opaque_value', lambda x: x),
-        # 5: ('_sha1_hash', lambda x: x),
-        17: ('in_app', decode_receipt),
-        19: ('original_application_version', decode_utf8),
-        21: ('expiration_date', decode_ia5),
-        1701: ('quantity', decode_int),
-        1702: ('product_id', decode_utf8),
-        1703: ('transaction_id', decode_utf8),
-        1704: ('purchase_date', decode_ia5),
-        1705: ('original_transaction_id', decode_utf8),
-        1706: ('original_purchase_date', decode_ia5),
-        1708: ('expires_date', decode_ia5),
-        1711: ('web_order_line_item_id', decode_int),
-        1712: ('cancellation_date', decode_ia5),
-    }
-    list_fields = [17]
+    receipt_map = FieldMap(RECEIPT_FIELD_MAP)
 
-    payload = decode_obj(data, 49)
+    receipt, _ = decoder.decode(data, asn1Spec=AppReceipt())
+
+    # Which fields are lists
+    list_fields = [TYPE_IN_APP]
+
     result = {}
-    for attr_type, attr_version, attr_raw_value in decode_seq_set(payload):
-        attr_value = decode_obj(attr_raw_value, 4)
+    for index in range(len(receipt)):
+        field = receipt[index]
+        field_type = field['type']
+        field_name = AppReceiptFieldType.namedValues.getName(field_type)
 
-        name, decoder = fields.get(attr_type, (None, None))
-        if attr_type in list_fields:
-            result.setdefault(name, []).append(decoder(attr_value))
-        elif name is not None:
-            result[name] = decoder(attr_value)
-        # else:
-        #    result['_unknown_{}'.format(attr_type)] = attr_value
+        if not field_name:
+            # We don't know what this field is
+            continue
+
+        value = field['value']
+        if field_type in list_fields:
+            result.setdefault(field_name, []).append(_decode_iap(value))
+        else:
+            result[field_name] = receipt_map.convert(field_type, value)
 
     result['_sandbox'] = (
         result.get('original_application_version') == '1.0' and
