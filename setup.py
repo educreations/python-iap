@@ -13,7 +13,7 @@ if sys.argv[-1] == 'publish':
 
 setup(
     name='iap',
-    version='2.2.0',
+    version='2.2.1',
     description='Python utilities for working with Apple In-App Purchases (IAP)',
     license="MIT",
     keywords="iap appstore django",
