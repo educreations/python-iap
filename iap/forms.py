@@ -8,7 +8,7 @@ class AppleStatusUpdateForm(forms.Form):
     """
     A Django form to validate the POST sent by Apple on subscription updates.
 
-    See https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/StoreKitGuide/Chapters/Subscriptions.html#//apple_ref/doc/uid/TP40008267-CH7-SW13
+    See https://developer.apple.com/documentation/storekit/in-app_purchase/enabling_status_update_notifications
     """
 
     ENVIRONMENTS = ('Sandbox', 'PROD')
@@ -18,6 +18,7 @@ class AppleStatusUpdateForm(forms.Form):
     RENEWAL = 'RENEWAL'
     INTERACTIVE_RENEWAL = 'INTERACTIVE_RENEWAL'
     DID_CHANGE_RENEWAL_PREF = 'DID_CHANGE_RENEWAL_PREF'
+    DID_CHANGE_RENEWAL_STATUS = 'DID_CHANGE_RENEWAL_STATUS'
 
     NOTIFICATION_TYPES = (
         INITIAL_BUY,
@@ -25,6 +26,7 @@ class AppleStatusUpdateForm(forms.Form):
         RENEWAL,
         INTERACTIVE_RENEWAL,
         DID_CHANGE_RENEWAL_PREF,
+        DID_CHANGE_RENEWAL_STATUS,
     )
 
     # Specifies whether the notification is for a sandbox or a production
