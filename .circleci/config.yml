@@ -24,9 +24,10 @@ jobs:
       - run:
           name: install python dependencies
           command: |
-            pip install virtualenv awscli
+            mkdir -p ./venv
             virtualenv venv
             . venv/bin/activate
+            pip install awscli
             pip install -e .[test]
       - save_cache:
           key: v1-dep-cache-{{ checksum "setup.py" }}
