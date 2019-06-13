@@ -11,14 +11,14 @@ class AppleStatusUpdateForm(forms.Form):
     See https://developer.apple.com/documentation/storekit/in-app_purchase/enabling_status_update_notifications
     """
 
-    ENVIRONMENTS = ('Sandbox', 'PROD')
+    ENVIRONMENTS = ("Sandbox", "PROD")
 
-    INITIAL_BUY = 'INITIAL_BUY'
-    CANCEL = 'CANCEL'
-    RENEWAL = 'RENEWAL'
-    INTERACTIVE_RENEWAL = 'INTERACTIVE_RENEWAL'
-    DID_CHANGE_RENEWAL_PREF = 'DID_CHANGE_RENEWAL_PREF'
-    DID_CHANGE_RENEWAL_STATUS = 'DID_CHANGE_RENEWAL_STATUS'
+    INITIAL_BUY = "INITIAL_BUY"
+    CANCEL = "CANCEL"
+    RENEWAL = "RENEWAL"
+    INTERACTIVE_RENEWAL = "INTERACTIVE_RENEWAL"
+    DID_CHANGE_RENEWAL_PREF = "DID_CHANGE_RENEWAL_PREF"
+    DID_CHANGE_RENEWAL_STATUS = "DID_CHANGE_RENEWAL_STATUS"
 
     NOTIFICATION_TYPES = (
         INITIAL_BUY,
@@ -31,14 +31,14 @@ class AppleStatusUpdateForm(forms.Form):
 
     # Specifies whether the notification is for a sandbox or a production
     # environment.
-    environment = forms.ChoiceField(choices=[
-        (env, env.lower()) for env in ENVIRONMENTS
-    ])
+    environment = forms.ChoiceField(
+        choices=[(env, env.lower()) for env in ENVIRONMENTS]
+    )
 
     # Describes the kind of event that triggered the notification.
-    notification_type = forms.ChoiceField(choices=[
-        (notif, notif.lower()) for notif in NOTIFICATION_TYPES
-    ])
+    notification_type = forms.ChoiceField(
+        choices=[(notif, notif.lower()) for notif in NOTIFICATION_TYPES]
+    )
 
     # This value is the same as the shared secret you POST when validating
     # receipts.
@@ -100,7 +100,7 @@ class AppleStatusUpdateForm(forms.Form):
             # Ensure the receipt can be base 64 decoded
             base64.b64decode(receipt)
         except TypeError:
-            raise forms.ValidationError('Unable to decode {}'.format(name))
+            raise forms.ValidationError("Unable to decode {}".format(name))
         return receipt
 
     def _clean_receipt_info(self, name):
@@ -115,16 +115,17 @@ class AppleStatusUpdateForm(forms.Form):
             return json.loads(info)
         except ValueError as e:
             raise forms.ValidationError(
-                'Unable to parse {} "{}": {}'.format(name, info, e))
+                'Unable to parse {} "{}": {}'.format(name, info, e)
+            )
 
     def clean_latest_receipt(self):
-        return self._clean_receipt('latest_receipt')
+        return self._clean_receipt("latest_receipt")
 
     def clean_latest_receipt_info(self):
-        return self._clean_receipt_info('latest_receipt_info')
+        return self._clean_receipt_info("latest_receipt_info")
 
     def clean_latest_expired_receipt(self):
-        return self._clean_receipt('latest_expired_receipt')
+        return self._clean_receipt("latest_expired_receipt")
 
     def clean_latest_expired_receipt_info(self):
-        return self._clean_receipt_info('latest_expired_receipt_info')
+        return self._clean_receipt_info("latest_expired_receipt_info")
