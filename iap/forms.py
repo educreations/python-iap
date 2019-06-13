@@ -111,7 +111,7 @@ class AppleStatusUpdateForm(forms.Form):
         # The following is to support py2 and py3
         # https://stackoverflow.com/a/22679982
         try:
-            basestring
+            basestring  # noqa
         except NameError:
             basestring = (str, bytes)
 
