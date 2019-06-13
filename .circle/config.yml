@@ -1,0 +1,73 @@
+version: 2.1
+
+workflows:
+  build_and_deploy:
+    jobs:
+      - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /[0-9]+(\.[0-9]+)*/
+            branches:
+              ignore: /.*/
+
+jobs:
+  build:
+    docker:
+      - image: circleci/python:2
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-dep-cache-{{ checksum "setup.py" }}
+      - run:
+          name: install python dependencies
+          command: |
+            python2 -m venv venv
+            . venv/bin/activate
+            pip install -e .[test]
+      - save_cache:
+          key: v1-dep-cache-{{ checksum "setup.py" }}
+          paths:
+            - "venv"
+      - run:
+          name: run tests
+          command: |
+            . venv/bin/activate
+            pip install -e .
+            pip install pytest
+            pytest
+  deploy:
+    docker:
+      - image: circleci/python:2
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-dep-cache-{{ checksum "setup.py" }}
+      - run:
+          name: install python dependencies
+          command: |
+            python -m venv venv
+            . venv/bin/activate
+            pip install -e .
+      - save_cache:
+          key: v1-dep-cache-{{ checksum "setup.py" }}
+          paths:
+            - "venv"
+      - run:
+          name: init .pypirc
+          command: |
+            echo -e "[pypi]" >> ~/.pypirc
+            echo -e "username = streeter" >> ~/.pypirc
+            echo -e "password = $PYPI_PASSWORD" >> ~/.pypirc
+      - run:
+          name: create packages
+          command: |
+            python setup.py bdist_wheel
+      - run:
+          name: upload to pypi
+          command: |
+            . venv/bin/activate
+            pip install twine
+            twine upload dist/*
