@@ -108,6 +108,13 @@ class AppleStatusUpdateForm(forms.Form):
         if not info:
             return None
 
+        # The following is to support py2 and py3
+        # https://stackoverflow.com/a/22679982
+        try:
+            basestring
+        except NameError:
+            basestring = (str, bytes)
+
         if not isinstance(info, basestring):
             return info
 
