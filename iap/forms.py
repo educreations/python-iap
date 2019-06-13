@@ -8,7 +8,7 @@ class AppleStatusUpdateForm(forms.Form):
     """
     A Django form to validate the POST sent by Apple on subscription updates.
 
-    See https://developer.apple.com/documentation/storekit/in-app_purchase/enabling_status_update_notifications
+    See https://developer.apple.com/documentation/storekit/in-app_purchase/enabling_status_update_notifications  # noqa
     """
 
     ENVIRONMENTS = ("Sandbox", "PROD")

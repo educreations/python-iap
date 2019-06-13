@@ -54,7 +54,7 @@ def load_pkcs7_bio_der(p7_der):
     """
     try:
         return crypto.load_pkcs7_data(crypto.FILETYPE_ASN1, p7_der)
-    except crypto.Error as ex:
+    except crypto.Error:
         raise InvalidReceipt("Unable to load PCKS7 data")
 
 
@@ -116,7 +116,7 @@ def decode_int(data):
     return int(i)
 
 
-# See https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html
+# See https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html  # noqa
 RECEIPT_FIELD_MAP = {
     TYPE_ENVIRONMENT: decode_utf8,
     TYPE_BUNDLE_ID: decode_utf8,
@@ -273,7 +273,7 @@ def validate_receipt_with_apple(data):
     if IAP_SHARED_SECRET:
         payload["password"] = IAP_SHARED_SECRET
 
-    # Docs at https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateRemotely.html
+    # Docs at https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateRemotely.html  # noqa
     for url in (PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL):
         r = requests.post(url, data=json.dumps(payload))
         r.raise_for_status()
