@@ -24,7 +24,7 @@ jobs:
       - run:
           name: install python dependencies
           command: |
-            pip install virtualenv
+            pip install virtualenv awscli
             virtualenv venv
             . venv/bin/activate
             pip install -e .[test]
@@ -32,6 +32,11 @@ jobs:
           key: v1-dep-cache-{{ checksum "setup.py" }}
           paths:
             - "venv"
+      - run:
+          name: fetch test files
+          command: |
+            . venv/bin/activate
+            aws s3 cp s3://educreations-secrets/python-iap/ tests/. --recursive
       - run:
           name: run tests
           command: |
