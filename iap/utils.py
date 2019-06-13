@@ -20,6 +20,17 @@ from .exceptions import (
     NoPurchasesException,
     ReceiptValidationException,
     RetryReceiptValidation,
+    APPSTORE_STATUS_INVALID_JSON,
+    APPSTORE_STATUS_MALFORMED_RECEIPT_DATA,
+    APPSTORE_STATUS_RECEIPT_AUTHENTICATION,
+    APPSTORE_STATUS_SHARED_SECRET_MISMATCH,
+    APPSTORE_STATUS_RECEIPT_SERVER_DOWN,
+    APPSTORE_STATUS_EXPIRED_SUBSCRIPTION,
+    APPSTORE_STATUS_TEST_ENVIRONMENT_RECEIPT,
+    APPSTORE_STATUS_PROD_ENVIRONMENT_RECEIPT,
+    APPSTORE_STATUS_UNAUTHORIZED_RECEIPT,
+    APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MIN,
+    APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MAX,
 )
 
 from .settings import (
@@ -44,13 +55,13 @@ def load_pkcs7_bio_der(p7_der):
     try:
         return crypto.load_pkcs7_data(crypto.FILETYPE_ASN1, p7_der)
     except crypto.Error as ex:
-        raise InvalidReceipt('Unable to load PCKS7 data')
+        raise InvalidReceipt("Unable to load PCKS7 data")
 
 
 def verify_receipt_sig(raw_data):
     store = crypto.X509Store()
 
-    with open(CA_FILE, 'rb') as ca_cert_file:
+    with open(CA_FILE, "rb") as ca_cert_file:
         ca_cert_string = ca_cert_file.read()
 
     cert = crypto.load_certificate(crypto.FILETYPE_PEM, ca_cert_string)
@@ -60,8 +71,9 @@ def verify_receipt_sig(raw_data):
     p7 = load_pkcs7_bio_der(raw_data)
     out = crypto._new_mem_buf()
     if not crypto._lib.PKCS7_verify(
-            p7._pkcs7, ffi.NULL, store._store, ffi.NULL, out, 0):
-        raise InvalidReceipt('Signature verification failed')
+        p7._pkcs7, ffi.NULL, store._store, ffi.NULL, out, 0
+    ):
+        raise InvalidReceipt("Signature verification failed")
 
     return crypto._bio_to_string(out)
 
@@ -142,16 +154,16 @@ class AppReceiptFieldType(univ.Integer):
     """Apple App Receipt named field type"""
 
     namedValues = namedval.NamedValues(
-        ('_environment', TYPE_ENVIRONMENT),
-        ('bundle_id', TYPE_BUNDLE_ID),
-        ('application_version', TYPE_APPLICATION_VERSION),
-        ('_opaque_value', TYPE_OPAQUE_VALUE),
-        ('_sha1_hash', TYPE_SHA1_HASH),
-        ('creation_date', TYPE_RECEIPT_CREATION_DATE),
-        ('in_app', TYPE_IN_APP),
-        ('original_purchase_date', TYPE_ORIGINAL_PURCHASE_DATE),
-        ('original_application_version', TYPE_ORIGINAL_APPLICATION_VERSION),
-        ('expiration_date', TYPE_EXPIRATION_DATE),
+        ("_environment", TYPE_ENVIRONMENT),
+        ("bundle_id", TYPE_BUNDLE_ID),
+        ("application_version", TYPE_APPLICATION_VERSION),
+        ("_opaque_value", TYPE_OPAQUE_VALUE),
+        ("_sha1_hash", TYPE_SHA1_HASH),
+        ("creation_date", TYPE_RECEIPT_CREATION_DATE),
+        ("in_app", TYPE_IN_APP),
+        ("original_purchase_date", TYPE_ORIGINAL_PURCHASE_DATE),
+        ("original_application_version", TYPE_ORIGINAL_APPLICATION_VERSION),
+        ("expiration_date", TYPE_EXPIRATION_DATE),
     )
 
 
@@ -159,9 +171,9 @@ class AppReceiptField(univ.Sequence):
     """Apple App Receipt field"""
 
     componentType = namedtype.NamedTypes(
-        namedtype.NamedType('type', AppReceiptFieldType()),
-        namedtype.NamedType('version', rfc2315.Version()),
-        namedtype.NamedType('value', univ.OctetString())
+        namedtype.NamedType("type", AppReceiptFieldType()),
+        namedtype.NamedType("version", rfc2315.Version()),
+        namedtype.NamedType("value", univ.OctetString()),
     )
 
 
@@ -175,15 +187,15 @@ class IAPReceiptFieldType(univ.Integer):
     """Apple In-App Purchase Receipt named field type"""
 
     namedValues = namedval.NamedValues(
-        ('quantity', TYPE_IN_APP_QUANTITY),
-        ('product_id', TYPE_IN_APP_PRODUCT_ID),
-        ('transaction_id', TYPE_IN_APP_TRANSACTION_ID),
-        ('purchase_date', TYPE_IN_APP_PURCHASE_DATE),
-        ('original_transaction_id', TYPE_IN_APP_ORIGINAL_TRANSACTION_ID),
-        ('original_purchase_date', TYPE_IN_APP_ORIGINAL_PURCHASE_DATE),
-        ('expires_date', TYPE_IN_APP_EXPIRES_DATE),
-        ('web_order_line_item_id', TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID),
-        ('cancellation_date', TYPE_IN_APP_CANCELLATION_DATE),
+        ("quantity", TYPE_IN_APP_QUANTITY),
+        ("product_id", TYPE_IN_APP_PRODUCT_ID),
+        ("transaction_id", TYPE_IN_APP_TRANSACTION_ID),
+        ("purchase_date", TYPE_IN_APP_PURCHASE_DATE),
+        ("original_transaction_id", TYPE_IN_APP_ORIGINAL_TRANSACTION_ID),
+        ("original_purchase_date", TYPE_IN_APP_ORIGINAL_PURCHASE_DATE),
+        ("expires_date", TYPE_IN_APP_EXPIRES_DATE),
+        ("web_order_line_item_id", TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID),
+        ("cancellation_date", TYPE_IN_APP_CANCELLATION_DATE),
     )
 
 
@@ -206,14 +218,14 @@ def _decode_iap(iap_data):
     result = {}
     for index in range(len(in_app)):
         field = in_app[index]
-        field_type = field['type']
+        field_type = field["type"]
         field_name = IAPReceiptFieldType.namedValues.getName(field_type)
 
         if not field_name:
             # We don't know what this field is
             continue
 
-        value = field['value']
+        value = field["value"]
         result[field_name] = in_app_map.convert(field_type, value)
 
     return result
@@ -230,22 +242,23 @@ def decode_receipt(data):
     result = {}
     for index in range(len(receipt)):
         field = receipt[index]
-        field_type = field['type']
+        field_type = field["type"]
         field_name = AppReceiptFieldType.namedValues.getName(field_type)
 
         if not field_name:
             # We don't know what this field is
             continue
 
-        value = field['value']
+        value = field["value"]
         if field_type in list_fields:
             result.setdefault(field_name, []).append(_decode_iap(value))
         else:
             result[field_name] = receipt_map.convert(field_type, value)
 
-    result['_sandbox'] = (
-        result.get('original_application_version') == '1.0' and
-        result.get('_environment') != 'Production')
+    result["_sandbox"] = (
+        result.get("original_application_version") == "1.0"
+        and result.get("_environment") != "Production"
+    )
 
     return result
 
@@ -255,43 +268,46 @@ def parse_receipt(raw_data):
 
 
 def validate_receipt_with_apple(data):
-    payload = {'receipt-data': base64.b64encode(data)}
+    payload = {"receipt-data": base64.b64encode(data)}
 
     if IAP_SHARED_SECRET:
-        payload['password'] = IAP_SHARED_SECRET
+        payload["password"] = IAP_SHARED_SECRET
 
-    # Docs at http://goo.gl/WV5U63
+    # Docs at https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateRemotely.html
     for url in (PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL):
         r = requests.post(url, data=json.dumps(payload))
         r.raise_for_status()
         try:
             content = r.json()
         except JSONDecodeError:
-            raise ReceiptValidationException({}, 'Unable to read response')
+            raise ReceiptValidationException({}, "Unable to read response")
 
-        if 'status' not in content:
-            raise ReceiptValidationException(content, 'Unknown response format')
-        status = content.get('status', 21000)
-        if status == 21000:
+        if "status" not in content:
+            raise ReceiptValidationException(content, "Unknown response format")
+        status = content.get("status", APPSTORE_STATUS_INVALID_JSON)
+
+        if status == APPSTORE_STATUS_INVALID_JSON:
             # The App Store could not read the JSON object you provided.
-            raise ReceiptValidationException(content, 'Unable to read payload')
-        elif status == 21002:
+            raise ReceiptValidationException(content, "Unable to read payload")
+        elif status == APPSTORE_STATUS_MALFORMED_RECEIPT_DATA:
             # The data in the receipt-data property was malformed or missing.
-            raise ReceiptValidationException(content, 'Malformed receipt-data')
-        elif status == 21003:
+            raise ReceiptValidationException(content, "Malformed receipt-data")
+        elif status == APPSTORE_STATUS_RECEIPT_AUTHENTICATION:
             # The receipt could not be authenticated.
             raise ReceiptValidationException(
-                content, 'Receipt is from an unknown source')
-        elif status == 21004:
+                content, "Receipt is from an unknown source"
+            )
+        elif status == APPSTORE_STATUS_SHARED_SECRET_MISMATCH:
             # Bad shared secret for the app / auth failed
             # NOTE: Only returned for iOS 6 style transaction receipts for
             # auto-renewable subscriptions.
             raise ReceiptValidationException(
-                content, 'The shared secret does not match one on file')
-        elif status == 21005:
+                content, "The shared secret does not match"
+            )
+        elif status == APPSTORE_STATUS_RECEIPT_SERVER_DOWN:
             # The receipt server is not currently available.
-            raise ReceiptValidationException(content, 'WebObjects')
-        elif status == 21006:
+            raise RetryReceiptValidation(content, "Server Unavailable")
+        elif status == APPSTORE_STATUS_EXPIRED_SUBSCRIPTION:
             # The receipt is inactive
             # NOTE: Only returned for iOS 6 style transaction receipts for
             # auto-renewable subscriptions. For iOS 7 style app receipts, the
@@ -299,74 +315,85 @@ def validate_receipt_with_apple(data):
             # For example, if you send a valid app receipt that contains an
             # expired subscription, the response is 0 because the receipt as a
             # whole is valid.
-            raise ReceiptValidationException(content, 'Inactive subscription')
-        elif status == 21007:
+            raise ReceiptValidationException(content, "Inactive subscription")
+        elif status == APPSTORE_STATUS_TEST_ENVIRONMENT_RECEIPT:
             if url == PRODUCTION_VERIFICATION_URL:
                 # We need to try the other environment
                 continue
-            raise ReceiptValidationException(content, 'Cannot try another url!')
-        elif status == 21008:
-            raise ReceiptValidationException(content, 'We already tried prod!')
+            raise ReceiptValidationException(content, "Cannot try another url!")
+        elif status == APPSTORE_STATUS_PROD_ENVIRONMENT_RECEIPT:
+            raise ReceiptValidationException(content, "We already tried prod!")
+        elif status == APPSTORE_STATUS_UNAUTHORIZED_RECEIPT:
+            # This receipt could not be authorized. Treated as if the purchase
+            # was never made.
+            raise NoPurchasesException(content, "The receipt could not be authorized")
         elif status == 21009:
             # This seems to be an internal Apple error. In this case,
             # one should retry the request
-            raise RetryReceiptValidation(content, 'Internal Apple error. Retry')
-        elif status == 21010:
-            # This receipt could not be authorized. Treated as if the purchase
-            # was never made.
-            raise NoPurchasesException(
-                content, 'The receipt could not be authorized')
-        elif status >= 21100 and status <= 12299:
+            raise RetryReceiptValidation(content, "Internal Apple error. Retry")
+        elif (
+            APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MIN
+            >= status
+            <= APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MAX
+        ):
             # There was an internal data access error
             raise RetryReceiptValidation(
-                content, 'Internal data access error %s. Retry' % status)
+                content, "Internal data access error %s. Retry" % status
+            )
         elif status != 0:
             raise RetryReceiptValidation(
-                content, 'Unknown status code %s. Retry' % status)
+                content, "Unknown status code %s. Retry" % status
+            )
 
-        if 'receipt' not in content:
+        if "receipt" not in content:
             raise ReceiptValidationException(
-                content, 'Unable to get receipt from Apple')
+                content, "Unable to get receipt from Apple"
+            )
 
-        receipt = content.get('receipt', [])
-        if not len(receipt):
-            raise ReceiptValidationException(content, 'Not enough receipt!')
+        receipt = content.get("receipt", [])
+        if not receipt:
+            raise ReceiptValidationException(content, "Not enough receipt!")
 
-        in_app_purchases = receipt.get('in_app', [])
-        if not len(in_app_purchases):
-            raise NoPurchasesException(content, 'No IAPs for receipt!')
+        in_app_purchases = receipt.get("in_app", [])
+        if not in_app_purchases:
+            raise NoPurchasesException(content, "No IAPs for receipt!")
 
-        latest_receipt = receipt.get('latest_receipt')
+        latest_receipt = receipt.get("latest_receipt")
         if latest_receipt:
             try:
-                receipt['latest_receipt_encoded'] = latest_receipt
-                receipt['latest_receipt'] = base64.b64decode(latest_receipt)
+                receipt["latest_receipt_encoded"] = latest_receipt
+                receipt["latest_receipt"] = base64.b64decode(latest_receipt)
             except TypeError:
                 raise ReceiptValidationException(
-                    content, 'Cannot decode latest_receipt')
+                    content, "Cannot decode latest_receipt"
+                )
 
         return content
 
 
 def validate_device(decoded_receipt, bundle_ids):
-    if 'bundle_id' not in decoded_receipt:
-        raise InvalidReceipt(u'Unknown decoded receipt format!')
-    if decoded_receipt['bundle_id'] not in bundle_ids:
+    if "bundle_id" not in decoded_receipt:
+        raise InvalidReceipt(u"Unknown decoded receipt format!")
+    if decoded_receipt["bundle_id"] not in bundle_ids:
         raise InvalidReceipt(
-            u'Unexpected bundle_id in decoded receipt {}'.format(
-                decoded_receipt['bundle_id']))
+            u"Unexpected bundle_id in decoded receipt {}".format(
+                decoded_receipt["bundle_id"]
+            )
+        )
     return True
 
 
 def validate_product(decoded_receipt, product_ids):
     # If there are no products in the receipt, they are all ok
-    for in_app in decoded_receipt.get('in_app', []):
-        if 'product_id' not in in_app:
-            raise InvalidReceipt(u'Unknown decoded receipt format!')
-        if in_app['product_id'] not in product_ids:
+    for in_app in decoded_receipt.get("in_app", []):
+        if "product_id" not in in_app:
+            raise InvalidReceipt(u"Unknown decoded receipt format!")
+        if in_app["product_id"] not in product_ids:
             raise InvalidReceipt(
-                u'Unexpected product_id in decoded receipt {}'.format(
-                    in_app['product_id']))
+                u"Unexpected product_id in decoded receipt {}".format(
+                    in_app["product_id"]
+                )
+            )
     return True
 
 
@@ -376,23 +403,25 @@ def validate_production_receipt(decoded_receipt):
 
 
 def validate_debug_receipt(decoded_receipt):
-    if not decoded_receipt.get('_sandbox', False):
-        raise InvalidReceipt('Debug receipts must be in the sandbox!')
+    if not decoded_receipt.get("_sandbox", False):
+        raise InvalidReceipt("Debug receipts must be in the sandbox!")
 
-    bundle_ids = ([DEBUG_BUNDLE_ID, PRODUCTION_BUNDLE_ID]
-                  if DEBUG_BUNDLE_ID else [PRODUCTION_BUNDLE_ID])
+    bundle_ids = (
+        [DEBUG_BUNDLE_ID, PRODUCTION_BUNDLE_ID]
+        if DEBUG_BUNDLE_ID
+        else [PRODUCTION_BUNDLE_ID]
+    )
 
     # The sandbox can have both production and debug bundle and product ids.
     # This is because when the app is in review, they test on the sandbox,
     # but are using a production build of the app.
     validate_device(decoded_receipt, bundle_ids)
-    validate_product(
-        decoded_receipt, DEBUG_PRODUCT_IDS | PRODUCTION_PRODUCT_IDS)
+    validate_product(decoded_receipt, DEBUG_PRODUCT_IDS | PRODUCTION_PRODUCT_IDS)
 
 
 def validate_receipt_is_active(data, timedelta, is_test=False, product_id=None):
     # Establish grace period
-    delta_kwargs = {'minutes': 1} if is_test else {'days': 1}
+    delta_kwargs = {"minutes": 1} if is_test else {"days": 1}
     grace_period = datetime.timedelta(**delta_kwargs)
 
     # Check with Apple
@@ -404,8 +433,9 @@ def validate_receipt_is_active(data, timedelta, is_test=False, product_id=None):
 
     # Validate the device and product are ok
     local_validation = (
-        validate_debug_receipt if is_test else validate_production_receipt)
-    local_validation(updated_content['receipt'])
+        validate_debug_receipt if is_test else validate_production_receipt
+    )
+    local_validation(updated_content["receipt"])
 
     # Use the latest receipt information from Apple, otherwise
     # use the IAP from the receipt. latest_receipt_info is only returned for
@@ -421,22 +451,23 @@ def validate_receipt_is_active(data, timedelta, is_test=False, product_id=None):
     # (in the request) and the value for latest_receipt_info is the same as
     # receipt.
     iaps = updated_content.get(
-        'latest_receipt_info', updated_content['receipt']['in_app'])
+        "latest_receipt_info", updated_content["receipt"]["in_app"]
+    )
 
     # Ensure the updated receipt has an active subscription.
     for iap in iaps:
-        if iap.get('cancellation_date'):
+        if iap.get("cancellation_date"):
             # This iap is canceled. Ignore it
             continue
 
         # If we were given a product_id, make sure this iap is for that same
         # product_id
-        if product_id is not None and iap.get('product_id') != product_id:
+        if product_id is not None and iap.get("product_id") != product_id:
             # Ignore this IAP as it is for a different product
             continue
 
         # Look for an expires_date
-        expires_date_ms = int(iap.get('expires_date_ms', 0))
+        expires_date_ms = int(iap.get("expires_date_ms", 0))
         if expires_date_ms:
             # See if this iap is expired
             expires_date_sec = expires_date_ms / 1000.0
@@ -445,11 +476,11 @@ def validate_receipt_is_active(data, timedelta, is_test=False, product_id=None):
                 return
         else:
             # Check the subscription period
-            purchase_date_sec = int(iap['original_purchase_date_ms']) / 1000.0
-            purchase_date = datetime.datetime.utcfromtimestamp(
-                purchase_date_sec)
+            purchase_date_sec = int(iap["original_purchase_date_ms"]) / 1000.0
+            purchase_date = datetime.datetime.utcfromtimestamp(purchase_date_sec)
             expires_date = purchase_date + timedelta
             if datetime.datetime.utcnow() < expires_date + grace_period:
                 return
     raise NoActiveReceiptException(
-        updated_content, 'No active IAP was found in the receipt')
+        updated_content, "No active IAP was found in the receipt"
+    )
