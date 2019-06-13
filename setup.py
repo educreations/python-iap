@@ -18,6 +18,7 @@ setup(
     url="https://github.com/educreations/python-iap",
     classifiers=[
         "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
@@ -30,6 +31,6 @@ setup(
         "pyasn1_modules",
         "requests",
     ],
-    extras_require={"test": ["pytest", "pytest-django", "responses"]},
+    extras_require={"test": ["pytest", "pytest-django", "responses", "flake8"]},
     tests_require=["iap[test]"],
 )

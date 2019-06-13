@@ -1,6 +1,5 @@
 import base64
 import datetime
-import json
 
 from cffi import FFI
 from OpenSSL import crypto
@@ -267,15 +266,17 @@ def parse_receipt(raw_data):
     return decode_receipt(verify_receipt_sig(raw_data))
 
 
-def validate_receipt_with_apple(data):
-    payload = {"receipt-data": base64.b64encode(data)}
+def validate_receipt_with_apple(data_bytes):
+    base64_bytes = base64.b64encode(data_bytes)
+    base64_string = base64_bytes.decode("utf-8")
+    payload = {"receipt-data": base64_string}
 
     if IAP_SHARED_SECRET:
         payload["password"] = IAP_SHARED_SECRET
 
     # Docs at https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateRemotely.html  # noqa
     for url in (PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL):
-        r = requests.post(url, data=json.dumps(payload))
+        r = requests.post(url, json=payload)
         r.raise_for_status()
         try:
             content = r.json()
