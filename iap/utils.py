@@ -355,6 +355,9 @@ def validate_receipt_with_apple(data_bytes):
         if not receipt:
             raise ReceiptValidationException(content, "Not enough receipt!")
 
+        # Set the sandbox property
+        receipt["_sandbox"] = url == SANDBOX_VERIFICATION_URL
+
         in_app_purchases = receipt.get("in_app", [])
         if not in_app_purchases:
             raise NoPurchasesException(content, "No IAPs for receipt!")
