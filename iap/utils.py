@@ -334,7 +334,7 @@ def validate_receipt_with_apple(data_bytes):
             raise RetryReceiptValidation(content, "Internal Apple error. Retry")
         elif (
             APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MIN
-            >= status
+            <= status
             <= APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MAX
         ):
             # There was an internal data access error
