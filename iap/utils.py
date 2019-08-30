@@ -1,5 +1,6 @@
 import base64
 import datetime
+import logging
 
 from cffi import FFI
 from OpenSSL import crypto
@@ -42,6 +43,9 @@ from .settings import (
     PRODUCTION_PRODUCT_IDS,
     DEBUG_PRODUCT_IDS,
 )
+
+
+log = logging.getLogger(__name__)
 
 ffi = FFI()
 
@@ -238,6 +242,8 @@ def decode_receipt(data):
     # Which fields are lists
     list_fields = [TYPE_IN_APP]
 
+    log.info("Decoding receipt data")
+
     result = {}
     for index in range(len(receipt)):
         field = receipt[index]
@@ -259,6 +265,8 @@ def decode_receipt(data):
         and result.get("_environment") != "Production"
     )
 
+    log.info("Decoded receipt data")
+
     return result
 
 
@@ -276,6 +284,14 @@ def validate_receipt_with_apple(data_bytes):
 
     # Docs at https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateRemotely.html  # noqa
     for url in (PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL):
+        is_production_url = url == PRODUCTION_VERIFICATION_URL
+
+        log.info(
+            "Validating receipt with Apple at the {} url".format(
+                "production" if is_production_url else "sandbox"
+            )
+        )
+
         r = requests.post(url, json=payload)
         r.raise_for_status()
         try:
@@ -286,6 +302,8 @@ def validate_receipt_with_apple(data_bytes):
         if "status" not in content:
             raise ReceiptValidationException(content, "Unknown response format")
         status = content.get("status", APPSTORE_STATUS_INVALID_JSON)
+
+        log.info("Received status {} from Apple".format(status))
 
         if status == APPSTORE_STATUS_INVALID_JSON:
             # The App Store could not read the JSON object you provided.
@@ -318,8 +336,9 @@ def validate_receipt_with_apple(data_bytes):
             # whole is valid.
             raise ReceiptValidationException(content, "Inactive subscription")
         elif status == APPSTORE_STATUS_TEST_ENVIRONMENT_RECEIPT:
-            if url == PRODUCTION_VERIFICATION_URL:
+            if is_production_url:
                 # We need to try the other environment
+                log.info("Receipt should be in the sandbox environment")
                 continue
             raise ReceiptValidationException(content, "Cannot try another url!")
         elif status == APPSTORE_STATUS_PROD_ENVIRONMENT_RECEIPT:
@@ -356,7 +375,7 @@ def validate_receipt_with_apple(data_bytes):
             raise ReceiptValidationException(content, "Not enough receipt!")
 
         # Set the sandbox property
-        receipt["_sandbox"] = url == SANDBOX_VERIFICATION_URL
+        receipt["_sandbox"] = not is_production_url
 
         in_app_purchases = receipt.get("in_app", [])
         if not in_app_purchases:
@@ -433,6 +452,7 @@ def validate_receipt_is_active(data, timedelta, is_test=False, product_id=None):
         updated_content = validate_receipt_with_apple(data)
     except RetryReceiptValidation:
         # Try one more time
+        log.warn("The first attempt to validate failed, trying one more time")
         updated_content = validate_receipt_with_apple(data)
 
     # Validate the device and product are ok
