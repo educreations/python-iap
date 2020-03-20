@@ -15,18 +15,25 @@ class AppleStatusUpdateForm(forms.Form):
 
     INITIAL_BUY = "INITIAL_BUY"
     CANCEL = "CANCEL"
-    RENEWAL = "RENEWAL"
     INTERACTIVE_RENEWAL = "INTERACTIVE_RENEWAL"
     DID_CHANGE_RENEWAL_PREF = "DID_CHANGE_RENEWAL_PREF"
     DID_CHANGE_RENEWAL_STATUS = "DID_CHANGE_RENEWAL_STATUS"
+    DID_FAIL_TO_RENEW = "DID_FAIL_TO_RENEW"
+    DID_RECOVER = "DID_RECOVER"
+
+    # Deprecated, use DID_RECOVER instead
+    RENEWAL = "RENEWAL"
 
     NOTIFICATION_TYPES = (
         INITIAL_BUY,
         CANCEL,
-        RENEWAL,
         INTERACTIVE_RENEWAL,
         DID_CHANGE_RENEWAL_PREF,
         DID_CHANGE_RENEWAL_STATUS,
+        DID_FAIL_TO_RENEW,
+        DID_RECOVER,
+        # Deprecated
+        RENEWAL,
     )
 
     # Specifies whether the notification is for a sandbox or a production
