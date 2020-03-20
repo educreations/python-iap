@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="iap",
-    version="2.2.7",
+    version="2.2.8",
     description="Python utilities for working with Apple In-App Purchases (IAP)",
     long_description=long_description,
     long_description_content_type="text/markdown",
