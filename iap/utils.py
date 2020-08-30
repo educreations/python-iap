@@ -4,9 +4,7 @@ import logging
 
 from asn1crypto.cms import ContentInfo
 from asn1crypto.core import (
-    Any,
     Integer,
-    ObjectIdentifier,
     OctetString,
     Sequence,
     SetOf,
@@ -86,25 +84,19 @@ def verify_receipt_sig(raw_data):
     # Pull out and parse the X.509 certificates included in the receipt
     itunes_cert_data = certificates[0].chosen.dump()
     itunes_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, itunes_cert_data)
-    itunes_cert_signature = certificates[0].chosen.signature
 
     wwdr_cert_data = certificates[1].chosen.dump()
     wwdr_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, wwdr_cert_data)
-    wwdr_cert_signature = certificates[1].chosen.signature
-
-    untrusted_root_data = certificates[2].chosen.dump()
-    untrusted_root = crypto.load_certificate(crypto.FILETYPE_ASN1, untrusted_root_data)
-    untrusted_root_signature = certificates[2].chosen.signature
 
     try:
         crypto.X509StoreContext(trusted_store, wwdr_cert).verify_certificate()
         trusted_store.add_cert(wwdr_cert)
-    except crypto.X509StoreContextError as e:
+    except crypto.X509StoreContextError:
         raise InvalidReceipt("Invalid WWDR certificate")
 
     try:
         crypto.X509StoreContext(trusted_store, itunes_cert).verify_certificate()
-    except crypto.X509StoreContextError as e:
+    except crypto.X509StoreContextError:
         raise InvalidReceipt("Invalid iTunes certificate")
 
     try:
@@ -112,7 +104,7 @@ def verify_receipt_sig(raw_data):
             itunes_cert, signer_info["signature"].native, receipt_data.native, "sha1"
         )
         # Valid data
-    except Exception as e:
+    except Exception:
         raise InvalidReceipt("Signature verification failed")
 
     return receipt_data.native
@@ -265,7 +257,7 @@ def decode_receipt(receipt_data):
                         .load(attr["value"].native)
                         .native
                     )
-                except Exception as exc:
+                except Exception:
                     result[attr_type] = attr["value"].native
             else:
                 result[attr_type] = attr["value"].native

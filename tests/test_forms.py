@@ -2,7 +2,6 @@ import datetime
 
 from iap.forms import (
     AppleLatestReceiptInfoForm,
-    AppleUnifiedLatestReceiptInfoForm,
     AppleUnifiedPendingRenewalInfoForm,
     AppleUnifiedReceiptForm,
     AppleStatusUpdateForm,
@@ -43,8 +42,8 @@ def test_valid_latest_receipt_info_form():
     assert isinstance(form.cleaned_data["expires_date"], datetime.datetime)
     assert isinstance(form.cleaned_data["original_purchase_date"], datetime.datetime)
     assert isinstance(form.cleaned_data["purchase_date"], datetime.datetime)
-    assert form.cleaned_data["is_in_intro_offer_period"] == False
-    assert form.cleaned_data["is_trial_period"] == False
+    assert not form.cleaned_data["is_in_intro_offer_period"]
+    assert not form.cleaned_data["is_trial_period"]
     assert form.cleaned_data["quantity"] == 1
 
 
