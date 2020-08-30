@@ -1,6 +1,6 @@
 from django.conf import settings
 
-CA_FILE = settings.IAP_SETTINGS["CA_FILE"]
+TRUSTED_ROOT_FILE = settings.IAP_SETTINGS["TRUSTED_ROOT_FILE"]
 
 IAP_SHARED_SECRET = settings.IAP_SETTINGS.get("SHARED_SECRET")
 

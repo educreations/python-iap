@@ -1,7 +1,375 @@
 import base64
+import datetime
 import json
 
 from django import forms
+import pytz
+
+from .widgets import IAPNullBooleanSelect
+
+
+EXPIRATION_INTENT_CHOICES = [
+    (1, "Voluntary cancellation"),
+    (2, "Billing error"),
+    (3, "Declined price change"),
+    (4, "Product not available at renewal"),
+    (5, "Unknown error"),
+]
+
+
+def _clean_date(data, name, required=True):
+    # Try to get the value in ms
+    for key in (name + "_ms", name):
+        if key not in data:
+            continue
+
+        value = data.get(key)
+
+        # the date in ms
+        seconds = int(value) / 1000.0
+        return datetime.datetime.fromtimestamp(seconds, tz=pytz.utc)
+
+    if required:
+        raise forms.ValidationError("Unable to find a date for {}".format(name))
+
+    return None
+
+
+def _clean_receipt(name, value):
+    if not value:
+        return None
+
+    try:
+        # Ensure the receipt can be base 64 decoded
+        return base64.b64decode(value)
+    except TypeError:
+        raise forms.ValidationError("Unable to decode {}".format(name))
+
+
+def _parse_json(name, value):
+    # The following is to support py2 and py3
+    # https://stackoverflow.com/a/22679982
+    try:
+        basestring  # noqa
+    except NameError:
+        basestring = (str, bytes)
+
+    # Is this already decoded?
+    if isinstance(value, basestring):
+        # Decode the json value
+        try:
+            return json.loads(value)
+        except ValueError as e:
+            raise forms.ValidationError("Unable to parse {}: {}".format(name, e))
+    else:
+        return value
+
+
+def _clean_form_data(form_cls, name, value):
+    if not value:
+        return None
+
+    loaded = _parse_json(name, value)
+
+    if isinstance(loaded, list):
+        raise forms.ValidationError("Unable to parse list {}: {}".format(name, loaded))
+
+    # Try to decode some of things in the json
+    form = form_cls(loaded)
+    if not form.is_valid():
+        raise forms.ValidationError(
+            "Unable to parse {}: {}".format(name, form.errors.as_data())
+        )
+    return form.cleaned_data
+
+
+def _clean_list_of_form_data(form_cls, name, value):
+    if not value:
+        return None
+
+    loaded = _parse_json(name, value)
+
+    if not isinstance(loaded, list):
+        raise forms.ValidationError(
+            "Unable to parse non list {}: {}".format(name, loaded)
+        )
+
+    return [
+        _clean_form_data(form_cls, "{}[{}]".format(name, i), item)
+        for i, item in enumerate(loaded)
+    ]
+
+
+class AppleLatestReceiptInfoForm(forms.Form):
+    """
+    A Django form to validate receipt info
+
+    See https://developer.apple.com/documentation/appstoreservernotifications/responsebody/latest_receipt_info
+    """
+
+    # An identifier that App Store Connect generates and the App Store uses to uniquely
+    # identify the app purchased. Treat this value as a 64-bit integer.
+    app_item_id = forms.IntegerField()
+
+    # An identifier that App Store Connect generates and the App Store uses to uniquely
+    # identify the in-app product purchased. Treat this value as a 64-bit integer.
+    item_id = forms.IntegerField()
+
+    # The unique identifier of the product purchased. You provide this value when
+    # creating the product in App Store Connect, and it corresponds to the
+    # productIdentifier property of the SKPayment object stored in the transaction's
+    # payment property.
+    product_id = forms.CharField()
+
+    # The time of the original app purchase. This value indicates the date of the
+    # subscription's initial purchase. The original purchase date applies to all
+    # product types and remains the same in all transactions for the same product
+    # ID. This value corresponds to the original transaction's transactionDate
+    # property in StoreKit.
+    original_purchase_date = forms.Field()
+
+    # The time the App Store charged the user's account for a subscription purchase
+    # or renewal after a lapse.
+    purchase_date = forms.Field()
+
+    # The time a subscription expires or when it will renew. Note that this field is
+    # called expires_date_ms in the receipt.
+    expires_date = forms.Field(required=False)
+
+    # The transaction identifier of the original purchase.
+    # See https://developer.apple.com/documentation/appstorereceipts/original_transaction_id
+    original_transaction_id = forms.CharField()
+
+    # A unique identifier for a transaction such as a purchase, restore, or renewal.
+    # See https://developer.apple.com/documentation/appstorereceipts/transaction_id for more information
+    transaction_id = forms.CharField()
+
+    # An indicator of whether an auto-renewable subscription is in the introductory
+    # price period.
+    is_in_intro_offer_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # An indicator of whether a subscription is in the free trial period.
+    is_trial_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # The number of consumable products purchased. This value corresponds to the
+    # quantity property of the SKPayment object stored in the transaction's payment
+    # property. The value is usually "1" unless modified with a mutable payment.
+    # The maximum value is "10".
+    quantity = forms.IntegerField()
+
+    # A unique identifier for purchase events across devices, including subscription-renewal
+    # events. This value is the primary key for identifying subscription purchases.
+    web_order_line_item_id = forms.CharField()
+
+    def clean_original_purchase_date(self):
+        return _clean_date(self.data, "original_purchase_date")
+
+    def clean_purchase_date(self):
+        return _clean_date(self.data, "purchase_date")
+
+    def clean_expires_date(self):
+        return _clean_date(self.data, "expires_date", required=False)
+
+
+class AppleUnifiedLatestReceiptInfoForm(forms.Form):
+    """
+    A Django form to validate receipt info
+
+    See https://developer.apple.com/documentation/appstorereceipts/responsebody/latest_receipt_info
+    """
+
+    CANCELLATION_REASON_CHOICES = ((0, "Other"), (1, "Issue"))
+
+    # The time Apple customer support canceled a transaction, or the time an
+    # auto-renewable subscription plan was upgraded. This field is only present
+    # for refunded transactions.
+    cancellation_date = forms.Field(required=False)
+
+    # The reason for a refunded transaction. When a customer cancels a transaction,
+    # the App Store gives them a refund and provides a value for this key. A value of
+    # "1" indicates that the customer canceled their transaction due to an actual or
+    # perceived issue within your app. A value of "0" indicates that the transaction
+    # was canceled for another reason; for example, if the customer made the purchase
+    # accidentally.
+    cancellation_reason = forms.ChoiceField(
+        choices=CANCELLATION_REASON_CHOICES, required=False
+    )
+
+    # The time a subscription expires or when it will renew.
+    expires_date = forms.Field(required=False)
+
+    # An indicator of whether an auto-renewable subscription is in the introductory
+    # price period.
+    is_in_intro_offer_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # An indicator of whether a subscription is in the free trial period.
+    is_trial_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # An indicator that a subscription has been canceled due to an upgrade. This
+    # field is only present for upgrade transactions.
+    is_upgraded = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # The time of the original app purchase. This value indicates the date of the
+    # subscription's initial purchase. The original purchase date applies to all
+    # product types and remains the same in all transactions for the same product
+    # ID. This value corresponds to the original transaction's transactionDate
+    # property in StoreKit.
+    original_purchase_date = forms.Field()
+
+    # The transaction identifier of the original purchase.
+    # See https://developer.apple.com/documentation/appstorereceipts/original_transaction_id
+    original_transaction_id = forms.CharField()
+
+    # The unique identifier of the product purchased. You provide this value when
+    # creating the product in App Store Connect, and it corresponds to the
+    # productIdentifier property of the SKPayment object stored in the transaction's
+    # payment property.
+    product_id = forms.CharField()
+
+    # The identifier of the subscription offer redeemed by the user. See promotional_offer_id for more information.
+    promotional_offer_id = forms.CharField(required=False)
+
+    # For consumable, non-consumable, and non-renewing subscription products, the time
+    # the App Store charged the user's account for a purchased or restored product. For
+    # auto-renewable subscriptions, the time the App Store charged the user's account
+    # for a subscription purchase or renewal after a lapse.
+    purchase_date = forms.Field()
+
+    # The number of consumable products purchased. This value corresponds to the
+    # quantity property of the SKPayment object stored in the transaction's payment
+    # property. The value is usually "1" unless modified with a mutable payment.
+    # The maximum value is "10".
+    quantity = forms.IntegerField()
+
+    # The identifier of the subscription group to which the subscription belongs. The value for this field is identical to the subscriptionGroupIdentifier property in SKProduct.
+    subscription_group_identifier = forms.CharField(required=False)
+
+    # A unique identifier for a transaction such as a purchase, restore, or renewal.
+    # See https://developer.apple.com/documentation/appstorereceipts/transaction_id for more information
+    transaction_id = forms.CharField()
+
+    # A unique identifier for purchase events across devices, including subscription-renewal
+    # events. This value is the primary key for identifying subscription purchases.
+    web_order_line_item_id = forms.CharField()
+
+    def clean_cancellation_date(self):
+        return _clean_date(self.data, "cancellation_date", required=False)
+
+    def clean_original_purchase_date(self):
+        return _clean_date(self.data, "original_purchase_date")
+
+    def clean_purchase_date(self):
+        return _clean_date(self.data, "purchase_date")
+
+    def clean_expires_date(self):
+        return _clean_date(self.data, "expires_date", required=False)
+
+
+class AppleUnifiedPendingRenewalInfoForm(forms.Form):
+    """
+    A Django form to validate a pending renewal structure in a unified receipt structure.
+
+    https://developer.apple.com/documentation/appstorereceipts/responsebody/pending_renewal_info
+    """
+
+    PRICE_CONSENT_CHOICES = ((0, "Pending"), (1, "Consented"))
+
+    # The current renewal preference for the auto-renewable subscription. The value for this key
+    # corresponds to the productIdentifier property of the product that the customer's subscription
+    # renews. This field is only present if the user downgrades or crossgrades to a subscription of
+    #   a different duration for the subsequent subscription period.
+    auto_renew_product_id = forms.CharField(required=False)
+
+    # The unique identifier of the product purchased. You provide this value when
+    # creating the product in App Store Connect, and it corresponds to the
+    # productIdentifier property of the SKPayment object stored in the transaction's
+    # payment property.
+    product_id = forms.CharField()
+
+    # The current renewal status for an auto-renewable subscription product. Note
+    # that these values are different from those of the auto_renew_status in the
+    # receipt.
+    auto_renew_status = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # The reason a subscription expired. This field is only present for an expired
+    # auto-renewable subscription.
+    expiration_intent = forms.ChoiceField(
+        choices=EXPIRATION_INTENT_CHOICES, required=False
+    )
+
+    # The time at which the grace period for subscription renewals expires. This key
+    # is only present for apps that have Billing Grace Period enabled and when the
+    # user experiences a billing error at the time of renewal.
+    grace_period_expires_date = forms.Field(required=False)
+
+    # A flag that indicates Apple is attempting to renew an expired subscription
+    # automatically. This field is only present if an auto-renewable subscription
+    # is in the billing retry state.
+    is_in_billing_retry_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
+
+    # The transaction identifier of the original purchase.
+    # See https://developer.apple.com/documentation/appstorereceipts/original_transaction_id
+    original_transaction_id = forms.CharField()
+
+    # The price consent status for a subscription price increase. This field is only present
+    # if the customer was notified of the price increase. The default value is "0" and changes
+    # to "1" if the customer consents.
+    price_consent_status = forms.ChoiceField(
+        choices=PRICE_CONSENT_CHOICES, required=False
+    )
+
+    def clean_grace_period_expires_date(self):
+        return _clean_date(self.data, "grace_period_expires_date", required=False)
+
+
+class AppleUnifiedReceiptForm(forms.Form):
+    """
+    A Django form to validate a unified reciept.
+
+    https://developer.apple.com/documentation/appstoreservernotifications/unified_receipt
+    """
+
+    ENVIRONMENTS = ("Sandbox", "Production")
+    ENVIRONMENT_CHOICES = [(env, env) for env in ENVIRONMENTS]
+
+    # Specifies whether the notification is for a sandbox or a production
+    # environment.
+    environment = forms.ChoiceField(choices=ENVIRONMENT_CHOICES)
+
+    # The latest Base64-encoded transaction receipt.
+    latest_receipt = forms.CharField(required=False)
+
+    # The JSON representation of the value in latest_receipt. Note that this
+    # field is an array in the receipt but a single object in server-to-server
+    # notifications. Not sent for expired transactions.
+    latest_receipt_info = forms.Field(required=False)
+
+    pending_renewal_info = forms.Field(required=False)
+
+    # The status code, where 0 indicates that the notification is valid.
+    status = forms.IntegerField()
+
+    def clean_status(self):
+        value = self.cleaned_data["status"]
+        if value != 0:
+            raise forms.ValidationError(
+                "Invalid unified receipt status: {}".format(value)
+            )
+        return value
+
+    def clean_latest_receipt_info(self):
+        return _clean_list_of_form_data(
+            AppleUnifiedLatestReceiptInfoForm,
+            "latest_receipt_info",
+            self.cleaned_data.get("latest_receipt_info"),
+        )
+
+    def clean_pending_renewal_info(self):
+        return _clean_list_of_form_data(
+            AppleUnifiedPendingRenewalInfoForm,
+            "pending_renewal_info",
+            self.cleaned_data.get("pending_renewal_info"),
+        )
 
 
 class AppleStatusUpdateForm(forms.Form):
@@ -9,9 +377,14 @@ class AppleStatusUpdateForm(forms.Form):
     A Django form to validate the POST sent by Apple on subscription updates.
 
     See https://developer.apple.com/documentation/storekit/in-app_purchase/enabling_status_update_notifications  # noqa
+    See https://developer.apple.com/documentation/appstoreservernotifications
     """
 
     ENVIRONMENTS = ("Sandbox", "PROD")
+    ENVIRONMENT_CHOICES = [
+        (ENVIRONMENTS[0], "Sandbox"),
+        [ENVIRONMENTS[1], "Production"],
+    ]
 
     INITIAL_BUY = "INITIAL_BUY"
     CANCEL = "CANCEL"
@@ -20,6 +393,7 @@ class AppleStatusUpdateForm(forms.Form):
     DID_CHANGE_RENEWAL_STATUS = "DID_CHANGE_RENEWAL_STATUS"
     DID_FAIL_TO_RENEW = "DID_FAIL_TO_RENEW"
     DID_RECOVER = "DID_RECOVER"
+    REFUND = "REFUND"
 
     # Deprecated, use DID_RECOVER instead
     RENEWAL = "RENEWAL"
@@ -32,114 +406,105 @@ class AppleStatusUpdateForm(forms.Form):
         DID_CHANGE_RENEWAL_STATUS,
         DID_FAIL_TO_RENEW,
         DID_RECOVER,
+        REFUND,
         # Deprecated
         RENEWAL,
     )
 
+    NOTIFICATION_CHOICES = [
+        (notif, notif.replace("_", " ").title()) for notif in NOTIFICATION_TYPES
+    ]
+
     # Specifies whether the notification is for a sandbox or a production
     # environment.
-    environment = forms.ChoiceField(
-        choices=[(env, env.lower()) for env in ENVIRONMENTS]
-    )
+    environment = forms.ChoiceField(choices=ENVIRONMENT_CHOICES)
 
-    # Describes the kind of event that triggered the notification.
-    notification_type = forms.ChoiceField(
-        choices=[(notif, notif.lower()) for notif in NOTIFICATION_TYPES]
-    )
+    # The subscription event that triggered the notification.
+    notification_type = forms.ChoiceField(choices=NOTIFICATION_CHOICES)
 
-    # This value is the same as the shared secret you POST when validating
-    # receipts.
+    # The same value as the shared secret you submit in the password field
+    # of the requestBody when validating receipts.
     password = forms.CharField()
 
-    # This value is the same as the Original Transaction Identifier in the
-    # receipt. You can use this value to relate multiple iOS 6-style transaction
-    # receipts for an individual customer's subscription.
-    original_transaction_id = forms.CharField(required=False)
+    # A string that contains the app bundle ID.
+    bid = forms.CharField()
 
-    # The time and date that a transaction was cancelled by Apple customer
-    # support. Posted only if the notification_type is CANCEL.
-    cancellation_date = forms.CharField(required=False)
+    # A string that contains the app bundle version.
+    bvrs = forms.CharField()
 
-    # The primary key for identifying a subscription purchase. Posted only if
-    # the notification_type is CANCEL.
-    web_order_line_item_id = forms.CharField(required=False)
+    # An identifier that App Store Connect generates and the App Store uses to
+    # uniquely identify the auto-renewable subscription that the user's
+    # subscription renews. Treat this value as a 64-bit integer.
+    # TODO(streeter) - convert to an integer?
+    auto_renew_adam_id = forms.CharField(required=False, max_length=64)
 
-    # The base-64 encoded transaction receipt for the most recent renewal
-    # transaction. Posted only if the notification_type is RENEWAL or
-    # INTERACTIVE_RENEWAL, and only if the renewal is successful.
-    latest_receipt = forms.CharField(required=False)
-
-    # The JSON representation of the receipt for the most recent renewal.
-    # Posted only if renewal is successful. Not posted for notification_type
-    # CANCEL.
-    latest_receipt_info = forms.Field(required=False)
-
-    # The base-64 encoded transaction receipt for the most recent renewal
-    # transaction. Posted only if the subscription expired.
-    latest_expired_receipt = forms.CharField(required=False)
-
-    # The JSON representation of the receipt for the most recent renewal
-    # transaction. Posted only if the notification_type is RENEWAL or CANCEL or
-    # if renewal failed and subscription expired.
-    latest_expired_receipt_info = forms.Field(required=False)
-
-    # A Boolean value indicated by strings "true" or "false". This is the same
-    # as the auto renew status in the receipt.
-    auto_renew_status = forms.NullBooleanField()
-
-    # The current renewal preference for the auto-renewable subscription. This
-    # is the Apple ID of the product.
-    auto_renew_adam_id = forms.CharField(required=False)
-
-    # This is the same as the Subscription Auto Renew Preference in the receipt.
+    # The product identifier of the auto-renewable subscription that the user's
+    # subscription renews.
     auto_renew_product_id = forms.CharField(required=False)
 
-    # This is the same as the Subscription Expiration Intent in the receipt.
-    # Posted only if notification_type is RENEWAL or INTERACTIVE_RENEWAL.
-    expiration_intent = forms.CharField(required=False)
+    # The current renewal status for an auto-renewable subscription product. Note
+    # that these values are different from those of the auto_renew_status in the
+    # receipt.
+    auto_renew_status = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
-    def _clean_receipt(self, name):
-        receipt = self.cleaned_data.get(name)
-        if not receipt:
-            return None
+    # The time at which the renewal status for an auto-renewable subscription was
+    # turned on or off.
+    auto_renew_status_change_date = forms.Field(required=False)
 
-        try:
-            # Ensure the receipt can be base 64 decoded
-            base64.b64decode(receipt)
-        except TypeError:
-            raise forms.ValidationError("Unable to decode {}".format(name))
-        return receipt
+    # The reason a subscription expired. This field is only present for an expired
+    # auto-renewable subscription.
+    expiration_intent = forms.ChoiceField(
+        choices=EXPIRATION_INTENT_CHOICES, required=False
+    )
 
-    def _clean_receipt_info(self, name):
-        info = self.cleaned_data.get(name)
-        if not info:
-            return None
+    # The latest Base64-encoded transaction receipt. This field appears in the
+    # notification instead of latest_receipt for expired transactions.
+    latest_expired_receipt = forms.CharField(required=False)
 
-        # The following is to support py2 and py3
-        # https://stackoverflow.com/a/22679982
-        try:
-            basestring  # noqa
-        except NameError:
-            basestring = (str, bytes)
+    # The JSON representation of the value in latest_expired_receipt. This appears
+    # in the notification instead of latest_receipt_info for expired transactions.
+    latest_expired_receipt_info = forms.Field(required=False)
 
-        if not isinstance(info, basestring):
-            return info
+    # The latest Base64-encoded transaction receipt.
+    latest_receipt = forms.CharField(required=False)
 
-        try:
-            return json.loads(info)
-        except ValueError as e:
-            raise forms.ValidationError(
-                'Unable to parse {} "{}": {}'.format(name, info, e)
-            )
+    # The JSON representation of the value in latest_receipt. Note that this
+    # field is an array in the receipt but a single object in server-to-server
+    # notifications. Not sent for expired transactions.
+    latest_receipt_info = forms.Field(required=False)
+
+    # An object that contains information about the most recent in-app purchase
+    # transactions for the app.
+    unified_receipt = forms.Field(required=False)
+
+    def clean_auto_renew_status_change_date(self):
+        return _clean_date(self.data, "auto_renew_status_change_date", required=False)
 
     def clean_latest_receipt(self):
-        return self._clean_receipt("latest_receipt")
+        return _clean_receipt("latest_receipt", self.cleaned_data.get("latest_receipt"))
 
     def clean_latest_receipt_info(self):
-        return self._clean_receipt_info("latest_receipt_info")
+        return _clean_form_data(
+            AppleLatestReceiptInfoForm,
+            "latest_receipt_info",
+            self.cleaned_data.get("latest_receipt_info"),
+        )
 
     def clean_latest_expired_receipt(self):
-        return self._clean_receipt("latest_expired_receipt")
+        return _clean_receipt(
+            "latest_expired_receipt", self.cleaned_data.get("latest_expired_receipt")
+        )
 
     def clean_latest_expired_receipt_info(self):
-        return self._clean_receipt_info("latest_expired_receipt_info")
+        return _clean_form_data(
+            AppleLatestReceiptInfoForm,
+            "latest_receipt_info",
+            self.cleaned_data.get("latest_receipt_info"),
+        )
+
+    def clean_unified_receipt(self):
+        return _clean_form_data(
+            AppleUnifiedReceiptForm,
+            "unified_receipt",
+            self.cleaned_data.get("unified_receipt"),
+        )

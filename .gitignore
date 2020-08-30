@@ -37,4 +37,5 @@ nosetests.xml
 # Testing
 *.bin
 *.pem
+*.cer
 .pytest_cache
