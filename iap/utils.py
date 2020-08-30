@@ -2,11 +2,18 @@ import base64
 import datetime
 import logging
 
-from cffi import FFI
+from asn1crypto.cms import ContentInfo
+from asn1crypto.core import (
+    Any,
+    Integer,
+    ObjectIdentifier,
+    OctetString,
+    Sequence,
+    SetOf,
+    UTF8String,
+    IA5String,
+)
 from OpenSSL import crypto
-from pyasn1_modules import rfc2315
-from pyasn1.codec.der import decoder
-from pyasn1.type import namedtype, namedval, univ, char
 import requests
 
 try:
@@ -34,20 +41,18 @@ from .exceptions import (
 )
 
 from .settings import (
-    CA_FILE,
+    DEBUG_BUNDLE_ID,
+    DEBUG_PRODUCT_IDS,
     IAP_SHARED_SECRET,
+    PRODUCTION_BUNDLE_ID,
+    PRODUCTION_PRODUCT_IDS,
     PRODUCTION_VERIFICATION_URL,
     SANDBOX_VERIFICATION_URL,
-    PRODUCTION_BUNDLE_ID,
-    DEBUG_BUNDLE_ID,
-    PRODUCTION_PRODUCT_IDS,
-    DEBUG_PRODUCT_IDS,
+    TRUSTED_ROOT_FILE,
 )
 
 
 log = logging.getLogger(__name__)
-
-ffi = FFI()
 
 
 def load_pkcs7_bio_der(p7_der):
@@ -62,23 +67,55 @@ def load_pkcs7_bio_der(p7_der):
 
 
 def verify_receipt_sig(raw_data):
-    store = crypto.X509Store()
+    trusted_store = crypto.X509Store()
 
-    with open(CA_FILE, "rb") as ca_cert_file:
-        ca_cert_string = ca_cert_file.read()
+    with open(TRUSTED_ROOT_FILE, "rb") as ca_cert_file:
+        trusted_root_data = ca_cert_file.read()
 
-    cert = crypto.load_certificate(crypto.FILETYPE_PEM, ca_cert_string)
+    trusted_root = crypto.load_certificate(crypto.FILETYPE_ASN1, trusted_root_data)
 
-    store.add_cert(cert)
+    trusted_store.add_cert(trusted_root)
 
-    p7 = load_pkcs7_bio_der(raw_data)
-    out = crypto._new_mem_buf()
-    if not crypto._lib.PKCS7_verify(
-        p7._pkcs7, ffi.NULL, store._store, ffi.NULL, out, 0
-    ):
+    pkcs_container = ContentInfo.load(raw_data)
+
+    # Extract the certificates, signature, and receipt_data
+    certificates = pkcs_container["content"]["certificates"]
+    signer_info = pkcs_container["content"]["signer_infos"][0]
+    receipt_data = pkcs_container["content"]["encap_content_info"]["content"]
+
+    # Pull out and parse the X.509 certificates included in the receipt
+    itunes_cert_data = certificates[0].chosen.dump()
+    itunes_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, itunes_cert_data)
+    itunes_cert_signature = certificates[0].chosen.signature
+
+    wwdr_cert_data = certificates[1].chosen.dump()
+    wwdr_cert = crypto.load_certificate(crypto.FILETYPE_ASN1, wwdr_cert_data)
+    wwdr_cert_signature = certificates[1].chosen.signature
+
+    untrusted_root_data = certificates[2].chosen.dump()
+    untrusted_root = crypto.load_certificate(crypto.FILETYPE_ASN1, untrusted_root_data)
+    untrusted_root_signature = certificates[2].chosen.signature
+
+    try:
+        crypto.X509StoreContext(trusted_store, wwdr_cert).verify_certificate()
+        trusted_store.add_cert(wwdr_cert)
+    except crypto.X509StoreContextError as e:
+        raise InvalidReceipt("Invalid WWDR certificate")
+
+    try:
+        crypto.X509StoreContext(trusted_store, itunes_cert).verify_certificate()
+    except crypto.X509StoreContextError as e:
+        raise InvalidReceipt("Invalid iTunes certificate")
+
+    try:
+        crypto.verify(
+            itunes_cert, signer_info["signature"].native, receipt_data.native, "sha1"
+        )
+        # Valid data
+    except Exception as e:
         raise InvalidReceipt("Signature verification failed")
 
-    return crypto._bio_to_string(out)
+    return receipt_data.native
 
 
 TYPE_ENVIRONMENT = 0
@@ -101,164 +138,140 @@ TYPE_IN_APP_ORIGINAL_PURCHASE_DATE = 1706
 TYPE_IN_APP_EXPIRES_DATE = 1708
 TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID = 1711
 TYPE_IN_APP_CANCELLATION_DATE = 1712
-
-
-def decode_ia5(data):
-    ia5_str, _ = decoder.decode(data, asn1Spec=char.IA5String())
-
-    return str(ia5_str)
-
-
-def decode_utf8(data):
-    s, _ = decoder.decode(data, asn1Spec=char.UTF8String())
-    return str(s)
-
-
-def decode_int(data):
-    i, _ = decoder.decode(data, asn1Spec=univ.Integer())
-    return int(i)
+TYPE_IN_APP_IS_IN_INTRO_OFFER_PERIOD = 1719
 
 
 # See https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html  # noqa
-RECEIPT_FIELD_MAP = {
-    TYPE_ENVIRONMENT: decode_utf8,
-    TYPE_BUNDLE_ID: decode_utf8,
-    TYPE_APPLICATION_VERSION: decode_utf8,
-    TYPE_OPAQUE_VALUE: (lambda x: x.asOctets()),
-    TYPE_SHA1_HASH: (lambda x: x.asOctets()),
-    TYPE_RECEIPT_CREATION_DATE: decode_ia5,
-    TYPE_ORIGINAL_PURCHASE_DATE: decode_ia5,
-    TYPE_ORIGINAL_APPLICATION_VERSION: decode_utf8,
-    TYPE_EXPIRATION_DATE: decode_ia5,
-}
+RECEIPT_FIELD_MAP = [
+    (TYPE_ENVIRONMENT, "_environment", UTF8String),
+    (TYPE_BUNDLE_ID, "bundle_id", UTF8String),
+    (TYPE_APPLICATION_VERSION, "application_version", UTF8String),
+    (TYPE_OPAQUE_VALUE, "_opaque_value", OctetString),
+    (TYPE_SHA1_HASH, "_sha1_hash", OctetString),
+    (TYPE_RECEIPT_CREATION_DATE, "creation_date", IA5String),
+    (TYPE_IN_APP, "in_app", OctetString),
+    (TYPE_ORIGINAL_PURCHASE_DATE, "original_purchase_date", IA5String),
+    (TYPE_ORIGINAL_APPLICATION_VERSION, "original_application_version", UTF8String),
+    (TYPE_EXPIRATION_DATE, "expiration_date", IA5String),
+]
 
 IN_APP_FIELD_MAP = {
-    TYPE_IN_APP_QUANTITY: decode_int,
-    TYPE_IN_APP_PRODUCT_ID: decode_utf8,
-    TYPE_IN_APP_TRANSACTION_ID: decode_utf8,
-    TYPE_IN_APP_PURCHASE_DATE: decode_ia5,
-    TYPE_IN_APP_ORIGINAL_TRANSACTION_ID: decode_utf8,
-    TYPE_IN_APP_ORIGINAL_PURCHASE_DATE: decode_ia5,
-    TYPE_IN_APP_EXPIRES_DATE: decode_ia5,
-    TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID: decode_int,
-    TYPE_IN_APP_CANCELLATION_DATE: decode_ia5,
+    (TYPE_IN_APP_QUANTITY, "quantity", Integer),
+    (TYPE_IN_APP_PRODUCT_ID, "product_id", UTF8String),
+    (TYPE_IN_APP_TRANSACTION_ID, "transaction_id", UTF8String),
+    (TYPE_IN_APP_PURCHASE_DATE, "purchase_date", IA5String),
+    (TYPE_IN_APP_ORIGINAL_TRANSACTION_ID, "original_transaction_id", UTF8String),
+    (TYPE_IN_APP_ORIGINAL_PURCHASE_DATE, "original_purchase_date", IA5String),
+    (TYPE_IN_APP_EXPIRES_DATE, "expires_date", IA5String),
+    (TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID, "web_order_line_item_id", Integer),
+    (TYPE_IN_APP_CANCELLATION_DATE, "cancellation_date", IA5String),
+    (TYPE_IN_APP_IS_IN_INTRO_OFFER_PERIOD, "is_in_intro_offer_period", Integer),
 }
 
 
-class FieldMap:
-    def __init__(self, field_map):
-        self.field_map = field_map
-
-    def convert(self, from_type, from_value):
-        return self.field_map.get(from_type, lambda x: x)(from_value)
-
-
-class AppReceiptFieldType(univ.Integer):
+class ReceiptAttributeType(Integer):
     """Apple App Receipt named field type"""
 
-    namedValues = namedval.NamedValues(
-        ("_environment", TYPE_ENVIRONMENT),
-        ("bundle_id", TYPE_BUNDLE_ID),
-        ("application_version", TYPE_APPLICATION_VERSION),
-        ("_opaque_value", TYPE_OPAQUE_VALUE),
-        ("_sha1_hash", TYPE_SHA1_HASH),
-        ("creation_date", TYPE_RECEIPT_CREATION_DATE),
-        ("in_app", TYPE_IN_APP),
-        ("original_purchase_date", TYPE_ORIGINAL_PURCHASE_DATE),
-        ("original_application_version", TYPE_ORIGINAL_APPLICATION_VERSION),
-        ("expiration_date", TYPE_EXPIRATION_DATE),
-    )
+    _map = {type_code: name for type_code, name, _ in RECEIPT_FIELD_MAP}
 
 
-class AppReceiptField(univ.Sequence):
+class ReceiptAttribute(Sequence):
     """Apple App Receipt field"""
 
-    componentType = namedtype.NamedTypes(
-        namedtype.NamedType("type", AppReceiptFieldType()),
-        namedtype.NamedType("version", rfc2315.Version()),
-        namedtype.NamedType("value", univ.OctetString()),
-    )
+    _fields = [
+        ("type", ReceiptAttributeType),
+        ("version", Integer),
+        ("value", OctetString),
+    ]
 
 
-class AppReceipt(univ.SetOf):
+class Receipt(SetOf):
     """Apple App Receipt"""
 
-    componentType = AppReceiptField()
+    _child_spec = ReceiptAttribute
 
 
-class IAPReceiptFieldType(univ.Integer):
+class InAppAttributeType(Integer):
     """Apple In-App Purchase Receipt named field type"""
 
-    namedValues = namedval.NamedValues(
-        ("quantity", TYPE_IN_APP_QUANTITY),
-        ("product_id", TYPE_IN_APP_PRODUCT_ID),
-        ("transaction_id", TYPE_IN_APP_TRANSACTION_ID),
-        ("purchase_date", TYPE_IN_APP_PURCHASE_DATE),
-        ("original_transaction_id", TYPE_IN_APP_ORIGINAL_TRANSACTION_ID),
-        ("original_purchase_date", TYPE_IN_APP_ORIGINAL_PURCHASE_DATE),
-        ("expires_date", TYPE_IN_APP_EXPIRES_DATE),
-        ("web_order_line_item_id", TYPE_IN_APP_WEB_ORDER_LINE_ITEM_ID),
-        ("cancellation_date", TYPE_IN_APP_CANCELLATION_DATE),
-    )
+    _map = {type_code: name for (type_code, name, _) in IN_APP_FIELD_MAP}
 
 
-class IAPReceiptField(AppReceiptField):
+class InAppAttribute(Sequence):
     """Apple In-App Purchase Receipt field"""
 
-    pass
+    _fields = [
+        ("type", InAppAttributeType),
+        ("version", Integer),
+        ("value", OctetString),
+    ]
 
 
-class IAPReceiptFields(univ.SetOf):
+class InAppPayload(SetOf):
     """Apple In-App Purchase Receipt fields"""
 
-    componentType = IAPReceiptField()
+    _child_spec = InAppAttribute
 
 
-def _decode_iap(iap_data):
-    in_app_map = FieldMap(IN_APP_FIELD_MAP)
-    in_app, _ = decoder.decode(iap_data, asn1Spec=IAPReceiptFields())
+def _decode_iap(in_apps):
+    in_app_attribute_types_to_class = {
+        name: type_class for _, name, type_class in IN_APP_FIELD_MAP
+    }
 
-    result = {}
-    for index in range(len(in_app)):
-        field = in_app[index]
-        field_type = field["type"]
-        field_name = IAPReceiptFieldType.namedValues.getName(field_type)
+    result = []
 
-        if not field_name:
-            # We don't know what this field is
-            continue
+    for in_app_data in in_apps:
+        in_app = {}
 
-        value = field["value"]
-        result[field_name] = in_app_map.convert(field_type, value)
+        for attr in InAppPayload.load(in_app_data.native):
+            attr_type = attr["type"].native
+
+            if attr_type in in_app_attribute_types_to_class:
+                in_app[attr_type] = (
+                    in_app_attribute_types_to_class[attr_type]
+                    .load(attr["value"].native)
+                    .native
+                )
+
+        result.append(in_app)
 
     return result
 
 
-def decode_receipt(data):
-    receipt_map = FieldMap(RECEIPT_FIELD_MAP)
-
-    receipt, _ = decoder.decode(data, asn1Spec=AppReceipt())
-
-    # Which fields are lists
-    list_fields = [TYPE_IN_APP]
-
+def decode_receipt(receipt_data):
     log.info("Decoding receipt data")
 
-    result = {}
-    for index in range(len(receipt)):
-        field = receipt[index]
-        field_type = field["type"]
-        field_name = AppReceiptFieldType.namedValues.getName(field_type)
+    receipt = Receipt.load(receipt_data)
 
-        if not field_name:
-            # We don't know what this field is
+    result = {}
+    attribute_types_to_class = {
+        name: type_class for _, name, type_class in RECEIPT_FIELD_MAP
+    }
+
+    in_apps = []
+    for attr in receipt:
+        attr_type = attr["type"].native
+
+        # Just store the in_apps for now
+        if attr_type == "in_app":
+            in_apps.append(attr["value"])
             continue
 
-        value = field["value"]
-        if field_type in list_fields:
-            result.setdefault(field_name, []).append(_decode_iap(value))
-        else:
-            result[field_name] = receipt_map.convert(field_type, value)
+        if attr_type in attribute_types_to_class:
+            if attribute_types_to_class[attr_type] is not None:
+                try:
+                    result[attr_type] = (
+                        attribute_types_to_class[attr_type]
+                        .load(attr["value"].native)
+                        .native
+                    )
+                except Exception as exc:
+                    result[attr_type] = attr["value"].native
+            else:
+                result[attr_type] = attr["value"].native
+
+    decoded_in_apps = _decode_iap(in_apps)
+    result["in_app"] = decoded_in_apps
 
     result["_sandbox"] = (
         result.get("original_application_version") == "1.0"

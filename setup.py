@@ -27,9 +27,8 @@ setup(
     install_requires=[
         "Django>=1.7",
         "pytz",
+        "asn1crypto",
         "pyopenssl>=17.0.0",
-        "pyasn1",
-        "pyasn1_modules",
         "requests",
     ],
     extras_require={"test": ["pytest", "pytest-django", "responses", "flake8"]},

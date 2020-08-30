@@ -5,6 +5,8 @@ import json
 from django import forms
 import pytz
 
+from .widgets import IAPNullBooleanSelect
+
 
 EXPIRATION_INTENT_CHOICES = [
     (1, "Voluntary cancellation"),
@@ -144,10 +146,10 @@ class AppleLatestReceiptInfoForm(forms.Form):
 
     # An indicator of whether an auto-renewable subscription is in the introductory
     # price period.
-    is_in_intro_offer_period = forms.NullBooleanField()
+    is_in_intro_offer_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # An indicator of whether a subscription is in the free trial period.
-    is_trial_period = forms.NullBooleanField()
+    is_trial_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The number of consumable products purchased. This value corresponds to the
     # quantity property of the SKPayment object stored in the transaction's payment
@@ -198,14 +200,14 @@ class AppleUnifiedLatestReceiptInfoForm(forms.Form):
 
     # An indicator of whether an auto-renewable subscription is in the introductory
     # price period.
-    is_in_intro_offer_period = forms.NullBooleanField()
+    is_in_intro_offer_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # An indicator of whether a subscription is in the free trial period.
-    is_trial_period = forms.NullBooleanField()
+    is_trial_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # An indicator that a subscription has been canceled due to an upgrade. This
     # field is only present for upgrade transactions.
-    is_upgraded = forms.NullBooleanField()
+    is_upgraded = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The time of the original app purchase. This value indicates the date of the
     # subscription's initial purchase. The original purchase date applies to all
@@ -287,7 +289,7 @@ class AppleUnifiedPendingRenewalInfoForm(forms.Form):
     # The current renewal status for an auto-renewable subscription product. Note
     # that these values are different from those of the auto_renew_status in the
     # receipt.
-    auto_renew_status = forms.NullBooleanField()
+    auto_renew_status = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The reason a subscription expired. This field is only present for an expired
     # auto-renewable subscription.
@@ -303,7 +305,7 @@ class AppleUnifiedPendingRenewalInfoForm(forms.Form):
     # A flag that indicates Apple is attempting to renew an expired subscription
     # automatically. This field is only present if an auto-renewable subscription
     # is in the billing retry state.
-    is_in_billing_retry_period = forms.NullBooleanField()
+    is_in_billing_retry_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The transaction identifier of the original purchase.
     # See https://developer.apple.com/documentation/appstorereceipts/original_transaction_id
@@ -443,7 +445,7 @@ class AppleStatusUpdateForm(forms.Form):
     # The current renewal status for an auto-renewable subscription product. Note
     # that these values are different from those of the auto_renew_status in the
     # receipt.
-    auto_renew_status = forms.NullBooleanField()
+    auto_renew_status = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The time at which the renewal status for an auto-renewable subscription was
     # turned on or off.
