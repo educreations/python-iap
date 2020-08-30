@@ -13,6 +13,14 @@ IAP_SETTINGS = {
 }
 
 if not os.path.isfile(TRUSTED_ROOT_FILE):
-    trusted_root_data = urllib.urlretrieve(
-        "https://www.apple.com/appleca/AppleIncRootCertificate.cer", TRUSTED_ROOT_FILE
-    )
+    try:
+        trusted_root_data = urllib.urlretrieve(
+            "https://www.apple.com/appleca/AppleIncRootCertificate.cer",
+            TRUSTED_ROOT_FILE,
+        )
+    except AttributeError:
+        # Python 3
+        trusted_root_data = urllib.request.urlretrieve(
+            "https://www.apple.com/appleca/AppleIncRootCertificate.cer",
+            TRUSTED_ROOT_FILE,
+        )
