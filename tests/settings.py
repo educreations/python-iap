@@ -1,5 +1,10 @@
 import os
-import urllib
+
+try:
+    # Python 3
+    import urllib.request as urllib
+except ImportError:
+    import urllib
 
 TRUSTED_ROOT_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "AppleIncRootCertificate.cer"
@@ -13,14 +18,6 @@ IAP_SETTINGS = {
 }
 
 if not os.path.isfile(TRUSTED_ROOT_FILE):
-    try:
-        trusted_root_data = urllib.urlretrieve(
-            "https://www.apple.com/appleca/AppleIncRootCertificate.cer",
-            TRUSTED_ROOT_FILE,
-        )
-    except AttributeError:
-        # Python 3
-        trusted_root_data = urllib.request.urlretrieve(
-            "https://www.apple.com/appleca/AppleIncRootCertificate.cer",
-            TRUSTED_ROOT_FILE,
-        )
+    trusted_root_data = urllib.urlretrieve(
+        "https://www.apple.com/appleca/AppleIncRootCertificate.cer", TRUSTED_ROOT_FILE,
+    )
