@@ -74,7 +74,11 @@ def verify_receipt_sig(raw_data):
 
     trusted_store.add_cert(trusted_root)
 
-    pkcs_container = ContentInfo.load(raw_data)
+    try:
+        pkcs_container = ContentInfo.load(raw_data)
+    except ValueError as exc:
+        log.error("Unable to decode receipt data {}", exc)
+        raise InvalidReceipt("Unable to decode receipt data")
 
     # Extract the certificates, signature, and receipt_data
     certificates = pkcs_container["content"]["certificates"]
@@ -91,12 +95,14 @@ def verify_receipt_sig(raw_data):
     try:
         crypto.X509StoreContext(trusted_store, wwdr_cert).verify_certificate()
         trusted_store.add_cert(wwdr_cert)
-    except crypto.X509StoreContextError:
+    except crypto.X509StoreContextError as exc:
+        log.error("Unable to decode wwwdr certificate {}", exc)
         raise InvalidReceipt("Invalid WWDR certificate")
 
     try:
         crypto.X509StoreContext(trusted_store, itunes_cert).verify_certificate()
-    except crypto.X509StoreContextError:
+    except crypto.X509StoreContextError as exc:
+        log.error("Unable to decode iTunes certificate {}", exc)
         raise InvalidReceipt("Invalid iTunes certificate")
 
     try:
@@ -104,7 +110,8 @@ def verify_receipt_sig(raw_data):
             itunes_cert, signer_info["signature"].native, receipt_data.native, "sha1"
         )
         # Valid data
-    except Exception:
+    except Exception as exc:
+        log.error("Signature verification failed {}", exc)
         raise InvalidReceipt("Signature verification failed")
 
     return receipt_data.native
