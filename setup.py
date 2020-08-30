@@ -26,6 +26,7 @@ setup(
     package_dir={"iap": "iap"},
     install_requires=[
         "Django>=1.7",
+        "pytz",
         "pyopenssl>=17.0.0",
         "pyasn1",
         "pyasn1_modules",

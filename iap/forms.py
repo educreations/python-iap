@@ -3,6 +3,7 @@ import datetime
 import json
 
 from django import forms
+import pytz
 
 
 EXPIRATION_INTENT_CHOICES = [
@@ -24,7 +25,7 @@ def _clean_date(data, name, required=True):
 
         # the date in ms
         seconds = int(value) / 1000.0
-        return datetime.datetime.fromtimestamp(seconds, tz=datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(seconds, tz=pytz.utc)
 
     if required:
         raise forms.ValidationError("Unable to find a date for {}".format(name))
