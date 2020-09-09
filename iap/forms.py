@@ -1,11 +1,14 @@
 import base64
 import datetime
 import json
+import logging
 
 from django import forms
 import pytz
 
 from .widgets import IAPNullBooleanSelect
+
+log = logging.getLogger(__name__)
 
 
 EXPIRATION_INTENT_CHOICES = [
@@ -72,7 +75,17 @@ def _clean_form_data(form_cls, name, value):
     loaded = _parse_json(name, value)
 
     if isinstance(loaded, list):
+        log.warn(
+            "Unable to parse form data for {} and field {}".format(
+                form_cls.__name__, name
+            )
+        )
         raise forms.ValidationError("Unable to parse list {}: {}".format(name, loaded))
+
+    log.info(
+        "Parsed form data for {}".format(form_cls.__name__),
+        extra={"data": {"value": value, "loaded": loaded}},
+    )
 
     # Try to decode some of things in the json
     form = form_cls(loaded)
@@ -88,6 +101,8 @@ def _clean_list_of_form_data(form_cls, name, value):
         return None
 
     loaded = _parse_json(name, value)
+
+    log.info("Cleaning form data list", extra={"data": {}})
 
     if not isinstance(loaded, list):
         raise forms.ValidationError(
@@ -159,7 +174,7 @@ class AppleLatestReceiptInfoForm(forms.Form):
 
     # A unique identifier for purchase events across devices, including subscription-renewal
     # events. This value is the primary key for identifying subscription purchases.
-    web_order_line_item_id = forms.CharField()
+    web_order_line_item_id = forms.CharField(required=False)
 
     def clean_original_purchase_date(self):
         return _clean_date(self.data, "original_purchase_date")
@@ -250,7 +265,7 @@ class AppleUnifiedLatestReceiptInfoForm(forms.Form):
 
     # A unique identifier for purchase events across devices, including subscription-renewal
     # events. This value is the primary key for identifying subscription purchases.
-    web_order_line_item_id = forms.CharField()
+    web_order_line_item_id = forms.CharField(required=False)
 
     def clean_cancellation_date(self):
         return _clean_date(self.data, "cancellation_date", required=False)
@@ -336,21 +351,30 @@ class AppleUnifiedReceiptForm(forms.Form):
     # environment.
     environment = forms.ChoiceField(choices=ENVIRONMENT_CHOICES)
 
-    # The latest Base64-encoded transaction receipt.
+    # The latest Base64-encoded app receipt.
     latest_receipt = forms.CharField(required=False)
 
-    # The JSON representation of the value in latest_receipt. Note that this
-    # field is an array in the receipt but a single object in server-to-server
-    # notifications. Not sent for expired transactions.
+    # An array that contains the latest 100 in-app purchase transactions
+    # of the decoded value in latest_receipt. This array excludes
+    # transactions for consumable products that your app has marked
+    # as finished. The contents of this array are identical to those
+    # in responseBody.Latest_receipt_info in the verifyReceipt endpoint
+    # response for receipt validation.
     latest_receipt_info = forms.Field(required=False)
 
+    # An array where each element contains the pending renewal information
+    # for each auto-renewable subscription identified in product_id. The
+    # contents of this array are identical to those in
+    # responseBody.Pending_renewal_info in the verifyReciept endpoint
+    # response for receipt validation.
     pending_renewal_info = forms.Field(required=False)
 
     # The status code, where 0 indicates that the notification is valid.
-    status = forms.IntegerField()
+    status = forms.IntegerField(required=False)
 
     def clean_status(self):
         value = self.cleaned_data["status"]
+        value = 0 if value is None else value
         if value != 0:
             raise forms.ValidationError(
                 "Invalid unified receipt status: {}".format(value)
