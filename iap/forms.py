@@ -38,15 +38,15 @@ def _clean_date(data, name, required=True):
     return None
 
 
-def _clean_receipt(name, value):
+def _clean_base64_receipt(name, value):
     if not value:
         return None
 
     try:
-        # Ensure the receipt can be base 64 decoded
+        # Ensure the receipt can be base64 decoded
         return base64.b64decode(value)
     except TypeError:
-        raise forms.ValidationError("Unable to decode {}".format(name))
+        raise forms.ValidationError("Unable to base64 decode {}".format(name))
 
 
 def _parse_json(name, value):
@@ -63,7 +63,7 @@ def _parse_json(name, value):
         try:
             return json.loads(value)
         except ValueError as e:
-            raise forms.ValidationError("Unable to parse {}: {}".format(name, e))
+            raise forms.ValidationError("Unable to JSON parse {}: {}".format(name, e))
     else:
         return value
 
@@ -381,6 +381,11 @@ class AppleUnifiedReceiptForm(forms.Form):
             )
         return value
 
+    def clean_latest_receipt(self):
+        return _clean_base64_receipt(
+            "latest_receipt", self.cleaned_data.get("latest_receipt")
+        )
+
     def clean_latest_receipt_info(self):
         return _clean_list_of_form_data(
             AppleUnifiedLatestReceiptInfoForm,
@@ -505,7 +510,9 @@ class AppleStatusUpdateForm(forms.Form):
         return _clean_date(self.data, "auto_renew_status_change_date", required=False)
 
     def clean_latest_receipt(self):
-        return _clean_receipt("latest_receipt", self.cleaned_data.get("latest_receipt"))
+        return _clean_base64_receipt(
+            "latest_receipt", self.cleaned_data.get("latest_receipt")
+        )
 
     def clean_latest_receipt_info(self):
         return _clean_form_data(
@@ -515,7 +522,7 @@ class AppleStatusUpdateForm(forms.Form):
         )
 
     def clean_latest_expired_receipt(self):
-        return _clean_receipt(
+        return _clean_base64_receipt(
             "latest_expired_receipt", self.cleaned_data.get("latest_expired_receipt")
         )
 

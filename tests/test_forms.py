@@ -62,7 +62,7 @@ def test_valid_unified_pending_renewal_info_form():
 def test_valid_unified_receipt_form():
     data = {
         "environment": "Production",
-        "latest_receipt": "asdfasdfasdfasdf",
+        "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         "latest_receipt_info": [
             {
                 "expires_date": "2020-07-27 00:02:39 Etc/GMT",
@@ -102,7 +102,7 @@ def test_valid_unified_receipt_form():
 def test_valid_unified_receipt_form_receipt_info():
     data = {
         "environment": "Production",
-        "latest_receipt": "asdfasdfasfd",
+        "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         "latest_receipt_info": [
             {
                 "expires_date": "2020-07-27 00:02:39 Etc/GMT",
@@ -145,7 +145,7 @@ def test_apple_status_update_form():
         "bid": "com.educreations.ios.Educreations",
         "bvrs": "00000",
         "environment": "PROD",
-        "latest_receipt": "asdfasdfasdf",
+        "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         "latest_receipt_info": {
             "app_item_id": "000000000",
             "bid": "com.educreations.ios.Educreations",
@@ -176,7 +176,7 @@ def test_apple_status_update_form():
         "password": "asdf",
         "unified_receipt": {
             "environment": "Production",
-            "latest_receipt": "asdfasdfasdf",
+            "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
             "latest_receipt_info": [
                 {
                     "expires_date": "2020-07-27 00:02:39 Etc/GMT",
@@ -221,7 +221,7 @@ def test_apple_status_update_form_failed_to_renew():
         "bid": "com.educreations.ios.Educreations",
         "bvrs": "00000",
         "environment": "PROD",
-        "latest_receipt": "asdfasdf",
+        "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         "latest_expired_receipt_info": {
             "app_item_id": "000000000",
             "bid": "com.educreations.ios.Educreations",
@@ -252,7 +252,7 @@ def test_apple_status_update_form_failed_to_renew():
         "password": "asdf",
         "unified_receipt": {
             "environment": "Production",
-            "latest_receipt": "asdfasdfasdf",
+            "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         },
     }
 
@@ -265,7 +265,7 @@ def test_apple_status_update_form_non_subscription():
         "bid": "com.educreations.ios.Educreations",
         "bvrs": "00000",
         "environment": "PROD",
-        "latest_receipt": "asdfasdfasdf",
+        "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         "latest_receipt_info": {
             "app_item_id": "000000000",
             "bid": "com.educreations.ios.Educreations",
@@ -295,7 +295,7 @@ def test_apple_status_update_form_non_subscription():
         "password": "asdfasdf",
         "unified_receipt": {
             "environment": "Production",
-            "latest_receipt": "asdfasdfasd",
+            "latest_receipt": "YXNkZmFzZGZhc2RmYXNkZmFzZGZhc2RmYXNkZmFzZGZhc2Rm",
         },
     }
 
