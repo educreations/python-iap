@@ -161,9 +161,11 @@ class AppleLatestReceiptInfoForm(forms.Form):
 
     # An indicator of whether an auto-renewable subscription is in the introductory
     # price period.
+    # https://developer.apple.com/documentation/appstorereceipts/is_in_intro_offer_period
     is_in_intro_offer_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # An indicator of whether a subscription is in the free trial period.
+    # https://developer.apple.com/documentation/appstorereceipts/is_trial_period
     is_trial_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The number of consumable products purchased. This value corresponds to the
@@ -215,9 +217,11 @@ class AppleUnifiedLatestReceiptInfoForm(forms.Form):
 
     # An indicator of whether an auto-renewable subscription is in the introductory
     # price period.
+    # https://developer.apple.com/documentation/appstorereceipts/is_in_intro_offer_period
     is_in_intro_offer_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # An indicator of whether a subscription is in the free trial period.
+    # https://developer.apple.com/documentation/appstorereceipts/is_trial_period
     is_trial_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # An indicator that a subscription has been canceled due to an upgrade. This
@@ -304,6 +308,7 @@ class AppleUnifiedPendingRenewalInfoForm(forms.Form):
     # The current renewal status for an auto-renewable subscription product. Note
     # that these values are different from those of the auto_renew_status in the
     # receipt.
+    # https://developer.apple.com/documentation/appstorereceipts/auto_renew_status
     auto_renew_status = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The reason a subscription expired. This field is only present for an expired
@@ -320,6 +325,7 @@ class AppleUnifiedPendingRenewalInfoForm(forms.Form):
     # A flag that indicates Apple is attempting to renew an expired subscription
     # automatically. This field is only present if an auto-renewable subscription
     # is in the billing retry state.
+    # https://developer.apple.com/documentation/appstorereceipts/is_in_billing_retry_period
     is_in_billing_retry_period = forms.NullBooleanField(widget=IAPNullBooleanSelect)
 
     # The transaction identifier of the original purchase.
