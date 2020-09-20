@@ -216,7 +216,7 @@ def test_apple_status_update_form():
         form.cleaned_data["unified_receipt"]["pending_renewal_info"][0][
             "auto_renew_status"
         ]
-        == True
+        is True
     )
 
 
