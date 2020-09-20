@@ -9,6 +9,8 @@ class IAPNullBooleanSelect(NullBooleanSelect):
     def value_from_datadict(self, data, files, name):
         value = data.get(name)
         return {
+            "0": False,
+            "1": True,
             "2": True,
             True: True,
             "True": True,

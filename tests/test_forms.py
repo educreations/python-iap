@@ -212,6 +212,12 @@ def test_apple_status_update_form():
 
     form = AppleStatusUpdateForm(data)
     assert form.is_valid(), form.errors.as_data()
+    assert (
+        form.cleaned_data["unified_receipt"]["pending_renewal_info"][0][
+            "auto_renew_status"
+        ]
+        == True
+    )
 
 
 def test_apple_status_update_form_failed_to_renew():
