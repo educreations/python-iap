@@ -57,7 +57,7 @@ workflows:
 jobs:
   build_python2:
     docker:
-      - image: cimg/python:2
+      - image: circleci/python:2
     steps:
       - checkout
       - restore_cache:
@@ -72,7 +72,7 @@ jobs:
       - *test
   build_python3:
     docker:
-      - image: cimg/python:3
+      - image: circleci/python:3
     steps:
       - checkout
       - restore_cache:
@@ -87,7 +87,7 @@ jobs:
       - *test
   deploy:
     docker:
-      - image: cimg/python:3
+      - image: circleci/python:3
     steps:
       - checkout
       - restore_cache:
