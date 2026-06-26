@@ -17,11 +17,12 @@ setup(
     author_email="engineering@educreations.com",
     url="https://github.com/educreations/python-iap",
     classifiers=[
-        "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3 :: Only",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    python_requires=">=3",
     packages=["iap"],
     package_dir={"iap": "iap"},
     install_requires=[
