@@ -29,7 +29,7 @@ setup(
         "Django>=1.9",
         "pytz",
         "asn1crypto",
-        "pyopenssl>=17.0.0",
+        "pyopenssl>=17.0.0,<24",
         "requests",
     ],
     extras_require={"test": ["pytest", "pytest-django", "responses", "flake8"]},

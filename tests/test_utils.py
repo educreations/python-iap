@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import pytest
@@ -20,18 +21,29 @@ from iap.exceptions import (
     APPSTORE_STATUS_INTERNAL_DATA_ACCESS_ERROR_MAX,
 )
 from iap.settings import PRODUCTION_VERIFICATION_URL, SANDBOX_VERIFICATION_URL
-from iap.utils import parse_receipt, validate_receipt_with_apple
+from iap import utils as iap_utils
+from iap.utils import validate_receipt_with_apple
 
 
 RECEIPT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "receipt.bin")
+RECEIPT_CERT_VALIDATION_TIME = datetime.datetime(2020, 1, 1)
 
 with open(RECEIPT_FILE, "rb") as r:
     assert r is not None
     receipt_data = r.read()
 
 
-def test_parse_receipt():
-    receipt_info = parse_receipt(receipt_data)
+def test_parse_receipt(monkeypatch):
+    x509_store_cls = iap_utils.crypto.X509Store
+
+    def x509_store_for_fixture(*args, **kwargs):
+        store = x509_store_cls(*args, **kwargs)
+        store.set_time(RECEIPT_CERT_VALIDATION_TIME)
+        return store
+
+    monkeypatch.setattr(iap_utils.crypto, "X509Store", x509_store_for_fixture)
+
+    receipt_info = iap_utils.parse_receipt(receipt_data)
     assert receipt_info
     for key in (
         "application_version",
